@@ -1,0 +1,19 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": "warning",
+  "diagnosticSeverityOverrides": {
+    "reportMissingImports": "information",
+    "reportGeneralTypeIssues": "information"
+  },
+  "extraPaths": [
+    "backend/app"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "backend/app",
+      "extraPaths": ["backend/app"]
+    }
+  ]
+}

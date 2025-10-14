@@ -1,0 +1,64 @@
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Python / backend
+.venv/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local env/secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+.DS_Store
+
+# Editor/OS
+.vscode/
+*.log
+
+# Docker artifacts
+db_data/
+storage/
+*.tar
+# Node
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+.dist/
+dist/
+.cache/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+.env*/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Docker
+**/.dockerignore
+*.pid
+
+# Build outputs
+build/
+coverage/
+
+# App storage (keep folder, ignore contents)
+storage/**
+!storage/.gitkeep

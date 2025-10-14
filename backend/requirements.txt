@@ -1,0 +1,20 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+SQLAlchemy==2.0.36
+# Postgres driver: install in Docker/Linux and CI; skip on Windows local to ease setup with Python 3.14
+psycopg2-binary==2.9.9; platform_system != "Windows" and python_version < "3.13"
+# Alternate psycopg3 for newer Python on non-Windows
+psycopg[binary]==3.2.3; platform_system != "Windows" and python_version >= "3.13"
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+email-validator==2.2.0
+bcrypt==3.2.2
+python-multipart==0.0.9
+bacpypes3==0.0.73
+# ReportLab for PDF generation; skip on Windows local (pdf_service has a fallback for tests)
+reportlab==4.2.5; platform_system != "Windows"
+pytest==8.3.3
+httpx==0.27.2
