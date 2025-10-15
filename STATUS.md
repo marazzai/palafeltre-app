@@ -2,7 +2,7 @@
 
 **Data aggiornamento:** 15 Ottobre 2025  
 **Branch:** main  
-**Commit:** 3d00b95
+**Commit:** 3676d3a
 
 ---
 
@@ -14,6 +14,7 @@
 - [x] RBAC completo (ruoli, permessi, audit log)
 - [x] Gestione 401 globale con toast e redirect
 - [x] Menu dinamico basato su ruoli utente
+- [x] **Rate limiting** login (5 richieste/min per IP)
 
 ### 📊 **Dashboard & UX**
 - [x] Dashboard con metriche in tempo reale
@@ -24,7 +25,8 @@
 
 ### 📝 **Gestione Incarichi & Manutenzioni**
 - [x] Tasks completi con commenti
-- [x] **Tasks Attachments** (upload, download, storage)
+- [x] **Tasks Attachments** (upload, download, delete con UI completa)
+- [x] **Tasks Ricorrenti** (giornaliero/settimanale/mensile con scheduler automatico)
 - [x] Tickets (segnalazioni manutenzione) con allegati
 - [x] Categorie personalizzabili
 - [x] Kanban view manutenzioni
@@ -141,11 +143,14 @@
 - **State:** React hooks (no redux)
 - **Icons:** Custom SVG components
 
-### DevOps
+### DevOps & Produzione
 - **Containerization:** Docker + Docker Compose
 - **Web Server:** Nginx (reverse proxy + static serving)
 - **CI/CD:** Manual via git push + Docker tasks
 - **Monitoring:** Logs via Docker
+- **Health Check:** `/health` endpoint con DB e storage checks
+- **Logging:** JSON strutturato per produzione (configurabile)
+- **Rate Limiting:** slowapi per protezione endpoint critici
 
 ---
 
@@ -164,9 +169,12 @@
 ## 🔗 ENDPOINT PRINCIPALI
 
 ### Autenticazione
-- `POST /api/v1/auth/login` - Login (username/email + password)
+- `POST /api/v1/auth/login` - Login (username/email + password) [Rate limited: 5/min]
 - `POST /api/v1/auth/refresh` - Refresh token
 - `GET /api/v1/me` - Profilo utente corrente
+
+### Health & Monitoring
+- `GET /health` - Health check con DB connectivity e storage status
 
 ### OBS Overlays (Pubblici)
 - `GET /obs/overlay/scoreboard` - HTML overlay scoreboard hockey
@@ -185,11 +193,11 @@
 
 ## 🎯 PROSSIMI STEP SUGGERITI
 
-1. **Test E2E completo** - Validare tutti i flussi prima del deployment
-2. **Migrazioni database** - Alembic per gestire schema changes
-3. **Push Notifications** - Migliora UX per eventi real-time
-4. **Noleggio Pattini** - Modulo completo se richiesto dal cliente
-5. **Tasks Ricorrenza** - Automatizza manutenzioni periodiche
+1. **Push Notifications WebSocket** - Implementare `/ws/notifications` per eventi real-time
+2. **Noleggio Pattini** - Modulo completo con inventario, QR code, check-in/out
+3. **Test E2E completo** - Validare tutti i flussi prima del deployment finale
+4. **Migrazioni database** - Alembic per gestire schema changes in modo controllato
+5. **Monitoring avanzato** - Prometheus/Grafana per metriche applicative
 
 ---
 
@@ -199,7 +207,7 @@
 - ⚠️ DALI service mock (richiede gateway BACnet/DALI)
 - ⚠️ Backup scheduler placeholder (implementare logica dump DB)
 - ⚠️ PDF branding dipende da logo path configurato
-- ⚠️ Task attachments senza UI frontend completa (solo backend pronto)
+- ✅ Task attachments UI completa e funzionante
 
 ---
 
