@@ -37,12 +37,12 @@ export function GameControl(){
   const [pen, setPen] = useState<{ number:string; minutes:number }>({ number:'', minutes:2 })
 
   useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
-  useEffect(() => { fetch('/api/v1/game/state').then(r => r.json()).then(setState).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState({ ...s, penalties: Array.isArray(s.penalties)? s.penalties: [] })).catch(() => {}) }, [])
   useEffect(() => {
     const ws = wsRef.current
     if(!ws) return
     ws.onmessage = (ev) => {
-      try{ const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) setState(msg.payload) }catch{}
+      try{ const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) { const p = msg.payload; setState({ ...p, penalties: Array.isArray(p.penalties)? p.penalties: [] }) } }catch{}
     }
   }, [wsRef])
 

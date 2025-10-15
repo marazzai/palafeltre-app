@@ -29,12 +29,12 @@ export function GameScoreboard(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>({ homeName:'Casa', awayName:'Ospiti', scoreHome:0, scoreAway:0, period:'1°', timerRemaining:20*60, penalties: [] })
 
-  useEffect(() => { fetch('/api/v1/game/state').then(r => r.json()).then(setState).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState({ ...s, penalties: Array.isArray(s.penalties)? s.penalties: [] })).catch(() => {}) }, [])
   useEffect(() => {
     const ws = wsRef.current
     if(!ws) return
     ws.onmessage = (ev) => {
-      try{ const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) setState(msg.payload) }catch{}
+      try{ const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) { const p = msg.payload; setState({ ...p, penalties: Array.isArray(p.penalties)? p.penalties: [] }) } }catch{}
     }
   }, [wsRef])
 
