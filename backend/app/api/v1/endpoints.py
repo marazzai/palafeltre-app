@@ -67,6 +67,19 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permesso negato")
     return user
 
+def require_permission(permission_code: str):
+    """Factory function to create a dependency that checks for a specific permission"""
+    def permission_checker(user: User = Depends(get_current_user)) -> User:
+        # Admin has all permissions
+        if any(r.name == 'admin' for r in user.roles):
+            return user
+        # Check if user has the specific permission through any of their roles
+        for role in user.roles:
+            if any(p.code == permission_code for p in role.permissions):
+                return user
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permesso '{permission_code}' richiesto")
+    return permission_checker
+
 # optional auth: don't require token
 def get_current_user_optional(db: Session = Depends(get_db), token: str | None = Depends(lambda: None)) -> User | None:
     # Try to read Authorization header manually
@@ -1421,7 +1434,7 @@ def _parse_mmss(v: str) -> int:
         raise HTTPException(status_code=400, detail="Formato durata non valido (usa MM:SS)")
 
 @router.post("/game/setup")
-async def game_setup(data: GameSetupRequest, _: User = Depends(require_admin)):
+async def game_setup(data: GameSetupRequest, _: User = Depends(require_permission('game.control'))):
     global game_state
     async with game_lock:
         secs = _parse_mmss(data.period_duration)
@@ -1670,7 +1683,7 @@ class ScoreUpdate(BaseModel):
     delta: int  # +1 or -1
 
 @router.post("/game/score")
-async def game_update_score(data: ScoreUpdate, _: User = Depends(require_admin)):
+async def game_update_score(data: ScoreUpdate, _: User = Depends(require_permission('game.control'))):
     async with game_lock:
         if data.team not in ("home","away"):
             raise HTTPException(status_code=400, detail="Team non valido")
@@ -1686,7 +1699,7 @@ class ShotsUpdate(BaseModel):
     delta: int  # +1 or -1
 
 @router.post("/game/shots")
-async def game_update_shots(data: ShotsUpdate, _: User = Depends(require_admin)):
+async def game_update_shots(data: ShotsUpdate, _: User = Depends(require_permission('game.control'))):
     async with game_lock:
         if data.team not in ("home","away"):
             raise HTTPException(status_code=400, detail="Team non valido")
@@ -1784,28 +1797,28 @@ def monitors_clear_all(db: Session = Depends(get_db), _: User = Depends(require_
     return {"ok": True}
 
 @router.post("/game/timer/start")
-async def game_timer_start(_: User = Depends(require_admin)):
+async def game_timer_start(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timer_running = True
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
 
 @router.post("/game/timer/stop")
-async def game_timer_stop(_: User = Depends(require_admin)):
+async def game_timer_stop(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timer_running = False
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
 
 @router.post("/game/timeout/start")
-async def game_timeout_start(_: User = Depends(require_admin)):
+async def game_timeout_start(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timeout_remaining = 30
         await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
     return {"ok": True}
 
 @router.post("/game/timeout/stop")
-async def game_timeout_stop(_: User = Depends(require_admin)):
+async def game_timeout_stop(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timeout_remaining = 0
         await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
@@ -1815,7 +1828,7 @@ class SirenToggle(BaseModel):
     on: bool
 
 @router.post("/game/siren")
-async def game_siren_set(data: SirenToggle, _: User = Depends(require_admin)):
+async def game_siren_set(data: SirenToggle, _: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.siren_on = bool(data.on)
         await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
@@ -1825,14 +1838,14 @@ class ObsToggle(BaseModel):
     visible: bool
 
 @router.post("/game/obs")
-async def game_obs_set(data: ObsToggle, _: User = Depends(require_admin)):
+async def game_obs_set(data: ObsToggle, _: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.obs_visible = bool(data.visible)
         await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
     return {"ok": True}
 
 @router.post("/game/timer/reset")
-async def game_timer_reset(_: User = Depends(require_admin)):
+async def game_timer_reset(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timer_running = False
         game_state.timer_remaining = game_state.period_duration_seconds
@@ -1840,7 +1853,7 @@ async def game_timer_reset(_: User = Depends(require_admin)):
     return {"ok": True}
 
 @router.post("/game/period/next")
-async def game_period_next(_: User = Depends(require_admin)):
+async def game_period_next(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.period_index = min(4, game_state.period_index + 1)
         game_state.timer_running = False
@@ -1867,7 +1880,7 @@ async def game_add_penalty(data: AddPenaltyRequest, _: User = Depends(require_ad
     return {"id": pid}
 
 @router.delete("/game/penalties/{penalty_id}")
-async def game_remove_penalty(penalty_id: int, _: User = Depends(require_admin)):
+async def game_remove_penalty(penalty_id: int, _: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.penalties = [p for p in game_state.penalties if p.id != penalty_id]
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
