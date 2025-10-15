@@ -24,7 +24,8 @@ function useWs(room: string){
   const [status, setStatus] = useState<'connecting'|'open'|'closed'>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   useEffect(() => {
-    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + `/ws/${room}`
+    const base = `/api/v1/ws/${room}`
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + base
     const ws = new WebSocket(url)
     wsRef.current = ws
     ws.onopen = () => setStatus('open')
