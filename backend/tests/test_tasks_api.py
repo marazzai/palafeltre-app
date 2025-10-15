@@ -28,9 +28,9 @@ def admin_token():
         if not role:
             role = Role(name='admin')
             db.add(role); db.commit(); db.refresh(role)
-        user = db.query(User).filter(User.email=='admin@example.com').first()
+        user = db.query(User).filter(User.username=='admin').first()
         if not user:
-            user = User(email='admin@example.com', full_name='Admin', hashed_password=hash_password('admin'), is_active=True)
+            user = User(username='admin', email='admin@example.com', full_name='Admin', hashed_password=hash_password('adimnadmin'), is_active=True)
             user.roles.append(role)
             db.add(user); db.commit(); db.refresh(user)
         token = create_access_token(str(user.id))
@@ -42,9 +42,9 @@ def admin_token():
 def user_token():
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.email=='user@example.com').first()
+        user = db.query(User).filter(User.username=='user').first()
         if not user:
-            user = User(email='user@example.com', full_name='User', hashed_password=hash_password('user'), is_active=True)
+            user = User(username='user', email='user@example.com', full_name='User', hashed_password=hash_password('user'), is_active=True)
             db.add(user); db.commit(); db.refresh(user)
         token = create_access_token(str(user.id))
         return token
@@ -84,10 +84,10 @@ def test_rbac_admin_routes(client, admin_token, user_token):
     assert isinstance(r.json(), list)
 
     # Non-admin cannot create users
-    r = client.post('/api/v1/users', json={"email":"x@y.com","password":"p"}, headers=auth_headers(user_token))
+    r = client.post('/api/v1/users', json={"username":"x","email":"x@y.com","password":"p"}, headers=auth_headers(user_token))
     assert r.status_code in (401,403)
 
     # Admin can create user
-    r = client.post('/api/v1/users', json={"email":"new@y.com","password":"p","full_name":"N"}, headers=auth_headers(admin_token))
+    r = client.post('/api/v1/users', json={"username":"new","email":"new@y.com","password":"p","full_name":"N"}, headers=auth_headers(admin_token))
     assert r.status_code == 200
     assert r.json()['email'] == 'new@y.com'

@@ -60,6 +60,7 @@ def ping():
 # Schemas
 class UserOut(BaseModel):
     id: int
+    username: str | None = None
     email: EmailStr
     full_name: str | None
     is_active: bool
@@ -69,12 +70,13 @@ class UserOut(BaseModel):
         from_attributes = True
 
 class UserCreate(BaseModel):
+    username: str
     email: EmailStr
     full_name: str | None = None
     password: str
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str
     password: str
 
 class TokenResponse(BaseModel):
@@ -85,7 +87,7 @@ class TokenResponse(BaseModel):
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
+    user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     token = create_access_token(str(user.id))
@@ -99,7 +101,7 @@ def refresh_token(current: User = Depends(get_current_user)):
 
 @router.get("/me", response_model=UserOut)
 def me(current: User = Depends(get_current_user)):
-    return UserOut(id=current.id, email=current.email, full_name=current.full_name, is_active=current.is_active, roles=[r.name for r in current.roles])
+    return UserOut(id=current.id, username=current.username, email=current.email, full_name=current.full_name, is_active=current.is_active, roles=[r.name for r in current.roles])
 
 class DashboardSummary(BaseModel):
     greeting: str
@@ -155,9 +157,9 @@ def forgot_password(_: ForgotPasswordRequest):
 
 @router.post("/users", response_model=UserOut)
 def create_user(data: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(status_code=400, detail="Email già in uso")
-    user = User(email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
+    if db.query(User).filter((User.email == data.email) | (User.username == data.username)).first():
+        raise HTTPException(status_code=400, detail="Username o email già in uso")
+    user = User(username=data.username, email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -171,14 +173,14 @@ def list_users(db: Session = Depends(get_db), q: str | None = None, page: int = 
         like = f"%{q.lower()}%"
         from sqlalchemy import func
         query = query.filter(
-            func.lower(User.email).like(like) | func.lower(User.full_name).like(like)
+            func.lower(User.email).like(like) | func.lower(User.full_name).like(like) | func.lower(User.username).like(like)
         )
     total = query.count()
     rows = query.order_by(User.id.asc()).offset(max(0, (page-1)*page_size)).limit(page_size).all()
     result: list[UserOut] = []
     for u in rows:
         result.append(UserOut(
-            id=u.id, email=u.email, full_name=u.full_name, is_active=u.is_active,
+            id=u.id, username=u.username, email=u.email, full_name=u.full_name, is_active=u.is_active,
             roles=[r.name for r in u.roles]
         ))
     # backward compatibility: if client expects list, just return items; admin panel can use a new /admin/users endpoint for meta

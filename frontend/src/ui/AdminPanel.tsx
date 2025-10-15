@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-type User = { id:number; full_name?:string|null; email:string; roles:string[]; is_active:boolean }
+type User = { id:number; username?:string; full_name?:string|null; email:string; roles:string[]; is_active:boolean }
 type Role = { id:number; name:string; permissions:string[] }
 
 export default function AdminPanel(){
@@ -57,9 +57,10 @@ function UsersSection(){
         <button className="btn">Aggiungi Utente</button>
       </div>
       <div className="table">
-        <div className="thead"><div>Nome</div><div>Email</div><div>Ruoli</div><div>Stato</div><div>Azioni</div></div>
+        <div className="thead"><div>Username</div><div>Nome</div><div>Email</div><div>Ruoli</div><div>Stato</div><div>Azioni</div></div>
         {items.map(u=> (
           <div className="tr" key={u.id}>
+            <div>{u.username||'-'}</div>
             <div>{u.full_name||'-'}</div>
             <div>{u.email}</div>
             <div>{u.roles.join(', ')}</div>

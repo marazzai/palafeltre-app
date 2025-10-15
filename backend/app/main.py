@@ -40,19 +40,14 @@ def on_startup():
             db.add(admin_role)
             db.commit()
             db.refresh(admin_role)
-        # find existing admin (legacy or new email)
-        admin = db.query(User).filter(User.email.in_(['admin@example.com','admin@palafeltre.local'])).first()
+        # ensure superuser with username 'admin'
+        admin = db.query(User).filter(User.username == 'admin').first()
         if not admin:
-            admin = User(email='admin@example.com', full_name='Admin', hashed_password=hash_password('admin'), is_active=True)
-            admin.roles.append(admin_role)
-            db.add(admin)
-            db.commit()
-        else:
-            # migrate legacy email to example.com
-            if admin.email == 'admin@palafeltre.local':
-                admin.email = 'admin@example.com'
-                db.add(admin)
-                db.commit()
+            admin = User(username='admin', email='admin@example.com', full_name='Admin', hashed_password=hash_password('adimnadmin'), is_active=True)
+            db.add(admin); db.commit(); db.refresh(admin)
+        # ensure admin role bound
+        if not any(r.name=='admin' for r in admin.roles):
+            admin.roles.append(admin_role); db.add(admin); db.commit()
     finally:
         db.close()
     # start background scheduler
