@@ -104,7 +104,7 @@ class DashboardSummary(BaseModel):
     recent_documents: list[dict]
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
-def dashboard_summary(db: Session = Depends(get_db)):
+def dashboard_summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     # Stubbed summary; will be replaced with real queries
     from datetime import datetime, timedelta
     now = datetime.utcnow()

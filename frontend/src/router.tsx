@@ -14,6 +14,8 @@ import { DocumentsPage } from './ui/DocumentsPage'
 import { ShiftsCalendar } from './ui/ShiftsCalendar'
 import { MyShifts } from './ui/MyShifts'
 import { AvailabilityPage } from './ui/AvailabilityPage'
+import Login from './ui/Login'
+import ProtectedRoute from './components/ProtectedRoute'
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="container">
@@ -23,30 +25,34 @@ const Placeholder = ({ title }: { title: string }) => (
 )
 
 export const router = createBrowserRouter([
+  { path: '/login', element: <Login /> },
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'profile', element: <Placeholder title="Profilo Utente" /> },
-      { path: 'roles', element: <Placeholder title="Gestione Ruoli" /> },
-      { path: 'roles/:id', element: <Placeholder title="Modifica Ruolo" /> },
-      { path: 'users', element: <Placeholder title="Gestione Utenti" /> },
-  { path: 'maintenance', element: <MaintenanceKanban /> },
-  { path: 'tasks', element: <TasksPage /> },
-      { path: 'checklists', element: <Placeholder title="Checklist" /> },
-  { path: 'documents', element: <DocumentsPage /> },
-      { path: 'skating', element: <SkatingControl /> },
-      { path: 'skating/control', element: <SkatingControl /> },
-      { path: 'skating/player', element: <SkatingPlayer /> },
-      { path: 'skating/display', element: <SkatingDisplay /> },
-      { path: 'game', element: <GameControl /> },
-      { path: 'scoreboard', element: <GameScoreboard /> },
-      { path: 'lights', element: <LightsControl /> },
-      { path: 'shifts', element: <ShiftsCalendar /> },
-      { path: '/admin', element: <AdminPanel /> },
-      { path: 'my-shifts', element: <MyShifts /> },
-      { path: 'availability', element: <AvailabilityPage /> },
+      // Protected area
+      {
+        element: <ProtectedRoute />,
+        children: [
+          { index: true, element: <Dashboard /> },
+          { path: 'profile', element: <Placeholder title="Profilo Utente" /> },
+          // Merge admin-related placeholders under AdminPanel later
+          { path: 'maintenance', element: <MaintenanceKanban /> },
+          { path: 'tasks', element: <TasksPage /> },
+          { path: 'checklists', element: <Placeholder title="Checklist" /> },
+          { path: 'documents', element: <DocumentsPage /> },
+          { path: 'skating', element: <SkatingControl /> },
+          { path: 'skating/player', element: <SkatingPlayer /> },
+          { path: 'skating/display', element: <SkatingDisplay /> },
+          { path: 'game', element: <GameControl /> },
+          { path: 'scoreboard', element: <GameScoreboard /> },
+          { path: 'lights', element: <LightsControl /> },
+          { path: 'shifts', element: <ShiftsCalendar /> },
+          { path: 'my-shifts', element: <MyShifts /> },
+          { path: 'availability', element: <AvailabilityPage /> },
+          { path: 'admin', element: <AdminPanel /> },
+        ],
+      },
     ],
   },
 ])
