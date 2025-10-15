@@ -25,11 +25,20 @@ class Task(Base):
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     creator_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'))
+    
+    # Recurrence fields
+    is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    recurrence_pattern: Mapped[str | None] = mapped_column(String(50), nullable=True)  # daily|weekly|monthly
+    recurrence_interval: Mapped[int | None] = mapped_column(Integer, nullable=True, default=1)  # every N days/weeks/months
+    recurrence_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # when to stop generating
+    parent_task_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('tasks.id'), nullable=True)  # template task
+    last_generated_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # track last instance creation
 
     creator = relationship('User', backref='created_tasks')
     assignees = relationship('User', secondary=task_assignees, backref='assigned_tasks')
     comments = relationship('TaskComment', back_populates='task', cascade='all, delete-orphan')
     attachments = relationship('TaskAttachment', back_populates='task', cascade='all, delete-orphan')
+    parent_task = relationship('Task', remote_side=[id], backref='recurring_instances')
 
 
 class TaskComment(Base):

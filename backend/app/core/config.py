@@ -33,6 +33,9 @@ class Settings:
         self.dali_gateway_device_id = int(os.getenv("DALI_GATEWAY_DEVICE_ID", "0")) if os.getenv("DALI_GATEWAY_DEVICE_ID") else None
         # Optional path to a logo image to include in generated reports (PNG/JPG)
         self.report_logo_path = os.getenv("REPORT_LOGO_PATH")
+        # Logging configuration
+        self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
+        self.json_logs: bool = os.getenv("JSON_LOGS", "false").lower() in ("1", "true", "yes", "on")
 
     @property
     def cors_origins(self) -> List[str]:

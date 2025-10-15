@@ -14,14 +14,20 @@ from ...models.scheduling import Shift, AvailabilityBlock, ShiftSwapRequest
 from fastapi import UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from typing import Dict, Set, List, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 import asyncio
 from ...core.security import verify_password, hash_password, create_access_token, decode_token
 from ...services.dali import service as dali_service
 from ...core.config import settings
 import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
-from fastapi import Form
+from fastapi import Form, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+import logging
+
+limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -100,7 +106,8 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     # Accept username or email as identifier to ease migration; avoid referencing missing column
     user = None
     if _has_username_column(db):
@@ -500,6 +507,11 @@ class TaskOut(BaseModel):
     assignees: list[int]
     creator_id: int
     created_at: datetime
+    is_recurring: bool = False
+    recurrence_pattern: str | None = None
+    recurrence_interval: int | None = None
+    recurrence_end_date: _date | None = None
+    parent_task_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -510,6 +522,10 @@ class TaskCreate(BaseModel):
     priority: str = 'medium'
     due_date: _date | None = None
     assignee_ids: list[int] = []
+    is_recurring: bool = False
+    recurrence_pattern: str | None = None  # daily|weekly|monthly
+    recurrence_interval: int | None = 1
+    recurrence_end_date: _date | None = None
 
 class TaskUpdate(BaseModel):
     title: str | None = None
@@ -548,7 +564,17 @@ def tasks_list(view: str = 'mine', db: Session = Depends(get_db), current: User 
 
 @router.post("/tasks", response_model=TaskOut, status_code=201)
 def tasks_create(data: TaskCreate, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
-    task = Task(title=data.title, description=data.description, priority=data.priority, due_date=data.due_date, creator_id=current.id)
+    task = Task(
+        title=data.title, 
+        description=data.description, 
+        priority=data.priority, 
+        due_date=data.due_date, 
+        creator_id=current.id,
+        is_recurring=data.is_recurring,
+        recurrence_pattern=data.recurrence_pattern if data.is_recurring else None,
+        recurrence_interval=data.recurrence_interval if data.is_recurring else None,
+        recurrence_end_date=data.recurrence_end_date if data.is_recurring else None
+    )
     if data.assignee_ids:
         users = db.query(User).filter(User.id.in_(data.assignee_ids)).all()
         task.assignees = users
@@ -557,7 +583,10 @@ def tasks_create(data: TaskCreate, db: Session = Depends(get_db), current: User 
     db.refresh(task)
     return TaskOut(
         id=task.id, title=task.title, description=task.description, priority=task.priority, due_date=task.due_date,
-        completed=task.completed, assignees=[u.id for u in task.assignees], creator_id=task.creator_id, created_at=task.created_at
+        completed=task.completed, assignees=[u.id for u in task.assignees], creator_id=task.creator_id, created_at=task.created_at,
+        is_recurring=task.is_recurring, recurrence_pattern=task.recurrence_pattern, 
+        recurrence_interval=task.recurrence_interval, recurrence_end_date=task.recurrence_end_date,
+        parent_task_id=task.parent_task_id
     )
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
@@ -567,7 +596,10 @@ def tasks_get(task_id: int, db: Session = Depends(get_db), current: User = Depen
         raise HTTPException(status_code=404, detail="Incarico non trovato")
     return TaskOut(
         id=t.id, title=t.title, description=t.description, priority=t.priority, due_date=t.due_date,
-        completed=t.completed, assignees=[u.id for u in t.assignees], creator_id=t.creator_id, created_at=t.created_at
+        completed=t.completed, assignees=[u.id for u in t.assignees], creator_id=t.creator_id, created_at=t.created_at,
+        is_recurring=t.is_recurring, recurrence_pattern=t.recurrence_pattern,
+        recurrence_interval=t.recurrence_interval, recurrence_end_date=t.recurrence_end_date,
+        parent_task_id=t.parent_task_id
     )
 
 @router.patch("/tasks/{task_id}", response_model=TaskOut)
@@ -2134,4 +2166,83 @@ ws.onclose = () => console.log('WebSocket closed');
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+# Recurring Tasks Scheduler
+async def recurring_tasks_scheduler():
+    """Background task that generates recurring task instances based on recurrence rules"""
+    from datetime import timedelta
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Check every hour
+            db = SessionLocal()
+            try:
+                today = date.today()
+                # Find all recurring template tasks
+                recurring_tasks = db.query(Task).filter(
+                    Task.is_recurring == True,
+                    or_(Task.recurrence_end_date.is_(None), Task.recurrence_end_date >= today)
+                ).all()
+                
+                for template in recurring_tasks:
+                    # Determine if we need to generate a new instance
+                    should_generate = False
+                    next_due_date = None
+                    
+                    if not template.last_generated_date:
+                        # First time - generate from due_date or today
+                        should_generate = True
+                        next_due_date = template.due_date or today
+                    else:
+                        # Calculate next due date based on pattern
+                        last_gen = template.last_generated_date
+                        interval = template.recurrence_interval or 1
+                        
+                        if template.recurrence_pattern == 'daily':
+                            next_due_date = last_gen + timedelta(days=interval)
+                        elif template.recurrence_pattern == 'weekly':
+                            next_due_date = last_gen + timedelta(weeks=interval)
+                        elif template.recurrence_pattern == 'monthly':
+                            # Approximate month by 30 days
+                            next_due_date = last_gen + timedelta(days=30 * interval)
+                        
+                        if next_due_date and next_due_date <= today:
+                            should_generate = True
+                    
+                    if should_generate and next_due_date:
+                        # Check if instance already exists for this date
+                        existing = db.query(Task).filter(
+                            Task.parent_task_id == template.id,
+                            Task.due_date == next_due_date
+                        ).first()
+                        
+                        if not existing:
+                            # Create new task instance
+                            new_task = Task(
+                                title=template.title,
+                                description=template.description,
+                                priority=template.priority,
+                                due_date=next_due_date,
+                                completed=False,
+                                creator_id=template.creator_id,
+                                parent_task_id=template.id,
+                                is_recurring=False
+                            )
+                            db.add(new_task)
+                            
+                            # Copy assignees
+                            for assignee in template.assignees:
+                                new_task.assignees.append(assignee)
+                            
+                            # Update template's last_generated_date
+                            template.last_generated_date = next_due_date
+                            db.add(template)
+                            
+                            db.commit()
+                            logger.info(f"Generated recurring task instance: {template.title} for {next_due_date}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in recurring_tasks_scheduler: {e}", exc_info=True)
+            await asyncio.sleep(60)
 
