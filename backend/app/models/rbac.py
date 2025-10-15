@@ -19,9 +19,10 @@ role_permissions = Table(
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    username: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    # Avoid Union/Optional annotations due to Python 3.14 + SQLAlchemy typing issues
+    username: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     roles = relationship("Role", secondary=user_roles, back_populates="users")
@@ -37,5 +38,5 @@ class Permission(Base):
     __tablename__ = "permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")

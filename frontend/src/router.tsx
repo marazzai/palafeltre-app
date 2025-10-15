@@ -5,6 +5,7 @@ import { Dashboard } from './ui/Dashboard'
 import { SkatingControl } from './ui/SkatingControl'
 import { SkatingPlayer } from './ui/SkatingPlayer'
 import { SkatingDisplay } from './ui/SkatingDisplay'
+import { LockerRoomMonitor } from './ui/LockerRoomMonitor'
 import { GameControl } from './ui/GameControl'
 import { GameScoreboard } from './ui/GameScoreboard'
 import { LightsControl } from './ui/LightsControl'
@@ -26,6 +27,8 @@ const Placeholder = ({ title }: { title: string }) => (
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  // Public routes (non-authenticated)
+  { path: '/monitors/locker-room', element: <LockerRoomMonitor /> },
   {
     path: '/',
     element: <AppLayout />,

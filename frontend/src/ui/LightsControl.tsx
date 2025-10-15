@@ -10,6 +10,7 @@ export function LightsControl(){
   const [token, setToken] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string>('')
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
   async function load(){
@@ -18,24 +19,35 @@ export function LightsControl(){
       if(!res.ok) throw new Error('Errore caricamento gruppi')
       const data = await res.json()
       setGroups(data.groups); setActiveScene(data.active_scene); setScenes(data.scenes)
+      setMessage('')
     }catch(err:any){ setMessage(err.message || 'Errore rete') }
   }
-  useEffect(() => { load(); const id = setInterval(load, 3000); return () => clearInterval(id) }, [token])
+  useEffect(() => { 
+    load()
+    if(!autoRefresh) return
+    const id = setInterval(load, 3000)
+    return () => clearInterval(id)
+  }, [token, autoRefresh])
 
   async function setLevel(groupId: number, level: number){
     setLoading(true)
+    setMessage('')
     try{
       const res = await fetch(`/api/v1/dali/groups/${groupId}/level`, { method:'POST', headers: { 'Content-Type':'application/json', ...(token? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ level }) })
       if(!res.ok) throw new Error('Errore impostando livello')
+      setMessage(`Livello gruppo ${groupId} aggiornato a ${level}%`)
       await load()
     }catch(err:any){ setMessage(err.message || 'Errore rete') } finally{ setLoading(false) }
   }
 
   async function recallScene(sceneId: number){
     setLoading(true)
+    setMessage('')
     try{
       const res = await fetch(`/api/v1/dali/scenes/${sceneId}/recall`, { method:'POST', headers: { ...(token? { Authorization: `Bearer ${token}` } : {}) } })
       if(!res.ok) throw new Error('Errore richiamo scena')
+      const sceneName = scenes.find(s => s.id === sceneId)?.name || `Scena ${sceneId}`
+      setMessage(`${sceneName} attivata`)
       await load()
     }catch(err:any){ setMessage(err.message || 'Errore rete') } finally{ setLoading(false) }
   }
@@ -45,11 +57,24 @@ export function LightsControl(){
       <h2 style={{ marginBottom: 12 }}>Controllo Luci</h2>
 
       <div className="card" style={{marginBottom:16}}>
-        <div className="card-body" style={{display:'flex', gap:8, alignItems:'center'}}>
-          <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
+        <div className="card-body" style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+          <input className="input" style={{flex:1, minWidth:200}} placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
           <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
+          <label style={{display:'flex', alignItems:'center', gap:6, cursor:'pointer'}}>
+            <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
+            <span>Auto-refresh</span>
+          </label>
+          <button className="btn btn-outline" onClick={load}>Aggiorna</button>
           {loading && <span className="text-muted" style={{fontSize:12}}>Caricamento…</span>}
-          {message && <span className="text-muted" style={{fontSize:12}}>{message}</span>}
+          {message && <span style={{fontSize:12, color: message.includes('Errore') ? '#ef4444' : '#22c55e'}}>{message}</span>}
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <div className="card-header"><strong>Controllo Globale</strong></div>
+        <div className="card-body" style={{display:'flex', gap:8}}>
+          <button className="btn" onClick={() => groups.forEach(g => setLevel(g.id, 100))}>Accendi Tutto</button>
+          <button className="btn btn-outline" onClick={() => groups.forEach(g => setLevel(g.id, 0))}>Spegni Tutto</button>
         </div>
       </div>
 

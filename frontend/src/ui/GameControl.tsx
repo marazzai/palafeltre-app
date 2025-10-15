@@ -1,16 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
+type Penalty = { id:number; team:'home'|'away'; player_number:string; remaining:number }
+
 type GameState = {
   homeName: string
   awayName: string
   scoreHome: number
   scoreAway: number
+  shotsHome: number
+  shotsAway: number
   period: string
   periodIndex: number
   timerRunning: boolean
   timerRemaining: number
   periodDuration: number
-  penalties: Array<{ id:number; team:'home'|'away'; player_number:string; remaining:number }>
+  timeoutRemaining: number
+  sirenOn: boolean
+  obsVisible: boolean
+  penalties: Penalty[]
 }
 
 function useWs(room: string){
@@ -28,28 +35,126 @@ function useWs(room: string){
   return { status, wsRef }
 }
 
+function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameState {
+  return {
+    homeName: raw.homeName ?? 'Casa',
+    awayName: raw.awayName ?? 'Ospiti',
+    scoreHome: Number(raw.scoreHome ?? 0),
+    scoreAway: Number(raw.scoreAway ?? 0),
+    shotsHome: Number(raw.shotsHome ?? 0),
+    shotsAway: Number(raw.shotsAway ?? 0),
+    period: raw.period ?? '1°',
+    periodIndex: Number(raw.periodIndex ?? 1),
+    timerRunning: Boolean(raw.timerRunning),
+    timerRemaining: Number(raw.timerRemaining ?? (20*60)),
+    periodDuration: Number(raw.periodDuration ?? (20*60)),
+    timeoutRemaining: Math.max(0, Number(raw.timeoutRemaining ?? 0)),
+    sirenOn: Boolean(raw.sirenOn),
+    obsVisible: raw.obsVisible !== false,
+    penalties: Array.isArray(raw.penalties) ? (raw.penalties as Penalty[]) : [],
+  }
+}
+
 export function GameControl(){
   const { status, wsRef } = useWs('game')
-  const [state, setState] = useState<GameState>({ homeName:'Casa', awayName:'Ospiti', scoreHome:0, scoreAway:0, period:'1°', periodIndex:1, timerRunning:false, timerRemaining:20*60, periodDuration:20*60, penalties: [] })
+  const [state, setState] = useState<GameState>(normalizeState({}))
   const [token, setToken] = useState<string>('')
   const [setup, setSetup] = useState({ home:'Casa', away:'Ospiti', duration:'20:00' })
   const [penModal, setPenModal] = useState<{ team:'home'|'away'; open:boolean }>({ team:'home', open:false })
   const [pen, setPen] = useState<{ number:string; minutes:number }>({ number:'', minutes:2 })
+  const [log, setLog] = useState<Array<{ ts:number; text:string }>>([])
 
   useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
-  useEffect(() => { fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState({ ...s, penalties: Array.isArray(s.penalties)? s.penalties: [] })).catch(() => {}) }, [])
+  useEffect(() => {
+    fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState(normalizeState(s))).catch(() => {})
+  }, [])
   useEffect(() => {
     const ws = wsRef.current
     if(!ws) return
     ws.onmessage = (ev) => {
-      try{ const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) { const p = msg.payload; setState({ ...p, penalties: Array.isArray(p.penalties)? p.penalties: [] }) } }catch{}
+      try{
+        const msg = JSON.parse(ev.data); if(msg.type === 'state' && msg.payload) { setState(normalizeState(msg.payload)) }
+      }catch{}
     }
   }, [wsRef])
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
+  function appendLog(text: string){
+    setLog(prev => [{ ts: Date.now(), text }, ...prev].slice(0, 20))
+  }
+
   async function post(url: string, body?: any){
-    await fetch(url, { method:'POST', headers: { 'Content-Type':'application/json', ...(authHeader||{}) }, body: body ? JSON.stringify(body) : undefined })
+    const res = await fetch(url, { method:'POST', headers: { 'Content-Type':'application/json', ...(authHeader||{}) }, body: body ? JSON.stringify(body) : undefined })
+    if(!res.ok) throw new Error(await res.text())
+    return res
+  }
+
+  const teamLabel = (team:'home'|'away') => team === 'home' ? state.homeName : state.awayName
+
+  async function startGame(){
+    try{
+      await post('/api/v1/game/setup', { home_name: setup.home, away_name: setup.away, period_duration: setup.duration })
+      appendLog(`Partita avviata: ${setup.home} vs ${setup.away}`)
+    }catch(e){ console.error(e) }
+  }
+
+  async function changeScore(team:'home'|'away', delta:number){
+    try{
+      await post('/api/v1/game/score', { team, delta })
+      appendLog(`${teamLabel(team)} punteggio ${delta>0?'+1':'-1'}`)
+    }catch(e){ console.error(e) }
+  }
+
+  async function changeShots(team:'home'|'away', delta:number){
+    try{
+      const current = team === 'home' ? state.shotsHome : state.shotsAway
+      if(delta < 0 && current <= 0) return
+      await post('/api/v1/game/shots', { team, delta })
+      appendLog(`${teamLabel(team)} tiri ${delta>0?'+1':'-1'}`)
+    }catch(e){ console.error(e) }
+  }
+
+  async function startTimeout(){
+    try{
+      await post('/api/v1/game/timeout/start')
+      appendLog('Timeout avviato (30s)')
+    }catch(e){ console.error(e) }
+  }
+
+  async function stopTimeout(){
+    try{
+      await post('/api/v1/game/timeout/stop')
+      appendLog('Timeout terminato')
+    }catch(e){ console.error(e) }
+  }
+
+  async function toggleSiren(){
+    try{
+      await post('/api/v1/game/siren', { on: !state.sirenOn })
+      appendLog(`Sirena ${!state.sirenOn ? 'attivata' : 'disattivata'}`)
+    }catch(e){ console.error(e) }
+  }
+
+  async function toggleObs(){
+    try{
+      await post('/api/v1/game/obs', { visible: !state.obsVisible })
+      appendLog(`Grafica OBS ${!state.obsVisible ? 'mostrata' : 'nascosta'}`)
+    }catch(e){ console.error(e) }
+  }
+
+  async function timerStart(){ try{ await post('/api/v1/game/timer/start'); appendLog('Cronometro avviato') }catch(e){ console.error(e) } }
+  async function timerStop(){ try{ await post('/api/v1/game/timer/stop'); appendLog('Cronometro fermato') }catch(e){ console.error(e) } }
+  async function timerReset(){ try{ await post('/api/v1/game/timer/reset'); appendLog('Cronometro resettato') }catch(e){ console.error(e) } }
+  async function periodNext(){ try{ await post('/api/v1/game/period/next'); appendLog('Periodo successivo') }catch(e){ console.error(e) } }
+
+  async function addPenalty(){
+    try{
+      await post('/api/v1/game/penalties', { team: penModal.team, player_number: pen.number, minutes: pen.minutes })
+      appendLog(`Penalità ${teamLabel(penModal.team)} #${pen.number} (${pen.minutes}m)`)
+      setPenModal({ ...penModal, open:false })
+      setPen({ number:'', minutes:2 })
+    }catch(e){ console.error(e) }
   }
 
   function formatTime(total: number){ const m = Math.floor(total/60).toString().padStart(2,'0'); const s = (total%60).toString().padStart(2,'0'); return `${m}:${s}` }
@@ -72,7 +177,7 @@ export function GameControl(){
           <input className="input" placeholder="Casa" value={setup.home} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, home: e.target.value })} />
           <input className="input" placeholder="Ospiti" value={setup.away} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, away: e.target.value })} />
           <input className="input" placeholder="Durata (MM:SS)" value={setup.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, duration: e.target.value })} />
-          <button className="btn" onClick={() => post('/api/v1/game/setup', { home_name: setup.home, away_name: setup.away, period_duration: setup.duration })}>Inizia Partita</button>
+          <button className="btn" onClick={startGame}>Inizia Partita</button>
           <a className="btn btn-outline" href="/scoreboard" target="_blank" rel="noreferrer">Apri Scoreboard</a>
         </div>
       </div>
@@ -81,17 +186,35 @@ export function GameControl(){
         <div className="card">
           <div className="card-header"><strong>{state.homeName}</strong></div>
           <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
-            <button className="btn" onClick={() => post('/api/v1/game/score', { team:'home', delta:-1 })}>-</button>
+            <button className="btn" onClick={() => changeScore('home', -1)}>-</button>
             <div style={{fontSize:36, fontWeight:700, width:80, textAlign:'center'}}>{state.scoreHome}</div>
-            <button className="btn" onClick={() => post('/api/v1/game/score', { team:'home', delta:1 })}>+</button>
+            <button className="btn" onClick={() => changeScore('home', 1)}>+</button>
           </div>
         </div>
         <div className="card">
           <div className="card-header"><strong>{state.awayName}</strong></div>
           <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
-            <button className="btn" onClick={() => post('/api/v1/game/score', { team:'away', delta:-1 })}>-</button>
+            <button className="btn" onClick={() => changeScore('away', -1)}>-</button>
             <div style={{fontSize:36, fontWeight:700, width:80, textAlign:'center'}}>{state.scoreAway}</div>
-            <button className="btn" onClick={() => post('/api/v1/game/score', { team:'away', delta:1 })}>+</button>
+            <button className="btn" onClick={() => changeScore('away', 1)}>+</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{marginTop:16}}>
+        <div className="card-header"><strong>Tiri in porta</strong></div>
+        <div className="card-body" style={{display:'flex', gap:24}}>
+          <div style={{display:'flex', alignItems:'center', gap:8}}>
+            <span style={{width:120, fontWeight:600}}>{state.homeName}</span>
+            <button className="btn btn-outline" onClick={() => changeShots('home', -1)} disabled={state.shotsHome === 0}>-</button>
+            <span style={{fontSize:28, fontWeight:700, width:60, textAlign:'center'}}>{state.shotsHome}</span>
+            <button className="btn" onClick={() => changeShots('home', 1)}>+</button>
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:8}}>
+            <span style={{width:120, fontWeight:600}}>{state.awayName}</span>
+            <button className="btn btn-outline" onClick={() => changeShots('away', -1)} disabled={state.shotsAway === 0}>-</button>
+            <span style={{fontSize:28, fontWeight:700, width:60, textAlign:'center'}}>{state.shotsAway}</span>
+            <button className="btn" onClick={() => changeShots('away', 1)}>+</button>
           </div>
         </div>
       </div>
@@ -100,11 +223,29 @@ export function GameControl(){
         <div className="card-header"><strong>Cronometro</strong></div>
         <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
           <div style={{fontSize:42, fontWeight:700, width:140, textAlign:'center'}}>{formatTime(state.timerRemaining)}</div>
-          <button className="btn" onClick={() => post('/api/v1/game/timer/start')}>Start</button>
-          <button className="btn btn-outline" onClick={() => post('/api/v1/game/timer/stop')}>Stop</button>
-          <button className="btn btn-outline" onClick={() => post('/api/v1/game/timer/reset')}>Reset</button>
+          <button className="btn" onClick={timerStart}>Start</button>
+          <button className="btn btn-outline" onClick={timerStop}>Stop</button>
+          <button className="btn btn-outline" onClick={timerReset}>Reset</button>
           <div className="text-muted" style={{fontSize:12}}>Periodo: {state.period}</div>
-          <button className="btn btn-outline" onClick={() => post('/api/v1/game/period/next')}>Periodo Successivo</button>
+          <button className="btn btn-outline" onClick={periodNext}>Periodo Successivo</button>
+        </div>
+      </div>
+
+      <div className="grid" style={{marginTop:16}}>
+        <div className="card">
+          <div className="card-header"><strong>Timeout</strong></div>
+          <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
+            <div style={{fontSize:28, fontWeight:700, width:100}}>{state.timeoutRemaining > 0 ? `${state.timeoutRemaining}s` : '—'}</div>
+            <button className="btn" onClick={startTimeout} disabled={state.timeoutRemaining > 0}>Avvia 30s</button>
+            <button className="btn btn-outline" onClick={stopTimeout} disabled={state.timeoutRemaining === 0}>Termina</button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><strong>Controlli Rapidi</strong></div>
+          <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+            <button className={`btn ${state.sirenOn ? '' : 'btn-outline'}`} onClick={toggleSiren}>{state.sirenOn ? 'Sirena ON' : 'Sirena OFF'}</button>
+            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} onClick={toggleObs}>{state.obsVisible ? 'OBS visibile' : 'OBS nascosto'}</button>
+          </div>
         </div>
       </div>
 
@@ -139,6 +280,17 @@ export function GameControl(){
         </div>
       </div>
 
+      <div className="card" style={{marginTop:16}}>
+        <div className="card-header"><strong>Log Partita</strong></div>
+        <div className="card-body" style={{maxHeight:200, overflow:'auto', display:'flex', flexDirection:'column', gap:6}}>
+          {log.length === 0 ? <span className="text-muted">Nessuna azione registrata.</span> : log.map(item => (
+            <div key={item.ts} className="text-muted" style={{fontSize:12}}>
+              {new Date(item.ts).toLocaleTimeString('it-IT', { hour12:false })} · {item.text}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {penModal.open && (
         <div className="modal is-open">
           <div className="modal-content" style={{minWidth:360}}>
@@ -152,7 +304,7 @@ export function GameControl(){
             </div>
             <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
               <button className="btn btn-outline" onClick={() => setPenModal({ ...penModal, open:false })}>Annulla</button>
-              <button className="btn" onClick={async () => { await post('/api/v1/game/penalties', { team: penModal.team, player_number: pen.number, minutes: pen.minutes }); setPenModal({ ...penModal, open:false }) }}>Aggiungi</button>
+              <button className="btn" onClick={addPenalty}>Aggiungi</button>
             </div>
           </div>
         </div>

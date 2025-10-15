@@ -40,20 +40,27 @@ def on_startup():
             db.add(admin_role)
             db.commit()
             db.refresh(admin_role)
-        # ensure superuser with username 'admin'
-        admin = db.query(User).filter(User.username == 'admin').first()
+        # ensure superuser with configured username
+        admin_username = settings.admin_username
+        admin_email = settings.admin_email
+        admin_password = settings.admin_password
+        admin = db.query(User).filter(User.username == admin_username).first()
         if not admin:
             # try migrate legacy admin by email
-            admin = db.query(User).filter(User.email.in_(['admin@example.com','admin@palafeltre.local'])).first()
+            admin = db.query(User).filter(User.email.in_([admin_email,'admin@palafeltre.local','admin@example.com'])).first()
             if admin:
-                admin.username = 'admin'
-                admin.hashed_password = hash_password('adimnadmin')
+                admin.username = admin_username
+                admin.hashed_password = hash_password(admin_password)
                 if not admin.email:
-                    admin.email = 'admin@example.com'
+                    admin.email = admin_email
                 db.add(admin); db.commit(); db.refresh(admin)
             else:
-                admin = User(username='admin', email='admin@example.com', full_name='Admin', hashed_password=hash_password('adimnadmin'), is_active=True)
+                admin = User(username=admin_username, email=admin_email, full_name='Admin', hashed_password=hash_password(admin_password), is_active=True)
                 db.add(admin); db.commit(); db.refresh(admin)
+        # Optional forced reset of admin password on each startup (for recovery)
+        if settings.force_reset_admin_password:
+            admin.hashed_password = hash_password(admin_password)
+            db.add(admin); db.commit(); db.refresh(admin)
         # ensure admin role bound
         if not any(r.name=='admin' for r in admin.roles):
             admin.roles.append(admin_role); db.add(admin); db.commit()

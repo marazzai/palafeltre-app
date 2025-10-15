@@ -7,12 +7,12 @@ from ...db.session import SessionLocal
 from ...models.rbac import User, Role, Permission
 from ...models.settings import AppSetting, AuditLog
 from ...models.skating import SkatingEvent
-from ...models.tasks import Task, TaskComment
+from ...models.tasks import Task, TaskComment, TaskAttachment
 from ...models.tickets import Ticket, TicketComment, TicketStatusHistory, TicketAttachment, TicketCategory
 from ...models.documents import Folder, Document, DocumentVersion
 from ...models.scheduling import Shift, AvailabilityBlock, ShiftSwapRequest
 from fastapi import UploadFile, File, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from typing import Dict, Set, List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -632,6 +632,48 @@ def tasks_list_comments(task_id: int, db: Session = Depends(get_db), current: Us
         raise HTTPException(status_code=404, detail="Incarico non trovato")
     rows = db.query(TaskComment).filter(TaskComment.task_id == task_id).order_by(TaskComment.created_at.asc()).all()
     return [TaskCommentOut.model_validate(r) for r in rows]
+
+# Task attachments
+@router.get('/tasks/{task_id}/attachments')
+def task_attachments_list(task_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    task = db.query(Task).get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task non trovato")
+    atts = db.query(TaskAttachment).filter(TaskAttachment.task_id == task_id).all()
+    return {"items": [{"id": a.id, "file_name": a.file_name, "uploaded_at": a.uploaded_at.isoformat()} for a in atts]}
+
+@router.post('/tasks/{task_id}/attachments')
+def task_attachments_upload(task_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    task = db.query(Task).get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task non trovato")
+    base = os.path.join(settings.storage_path, 'tasks', str(task_id))
+    os.makedirs(base, exist_ok=True)
+    dest = os.path.join(base, file.filename or 'unnamed')
+    with open(dest, 'wb') as fh:
+        shutil.copyfileobj(file.file, fh)
+    att = TaskAttachment(task_id=task_id, file_name=file.filename or 'unnamed', file_path=dest)
+    db.add(att)
+    db.commit()
+    return {"id": att.id, "file_name": att.file_name}
+
+@router.get('/tasks/attachments/{att_id}')
+def task_attachments_download(att_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    att = db.query(TaskAttachment).get(att_id)
+    if not att or not os.path.exists(att.file_path):
+        raise HTTPException(status_code=404, detail="Allegato non trovato")
+    return FileResponse(att.file_path, filename=att.file_name)
+
+@router.delete('/tasks/attachments/{att_id}')
+def task_attachments_delete(att_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    att = db.query(TaskAttachment).get(att_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Allegato non trovato")
+    if os.path.exists(att.file_path):
+        os.remove(att.file_path)
+    db.delete(att)
+    db.commit()
+    return {"ok": True}
 
 # ===================== TICKETS (Maintenance/Kanban) =====================
 class TicketOut(BaseModel):
@@ -1819,4 +1861,277 @@ async def game_scheduler():
                 await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
             except Exception:
                 pass
+
+# ===================== OBS BROWSER SOURCE OVERLAYS =====================
+
+@router.get("/obs/overlay/scoreboard", response_class=HTMLResponse)
+def obs_overlay_scoreboard():
+    """HTML overlay per OBS - Scoreboard Hockey"""
+    html = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>OBS Overlay - Scoreboard</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { 
+    background: transparent; 
+    font-family: 'Arial Black', Arial, sans-serif; 
+    color: #fff;
+    overflow: hidden;
+}
+#overlay {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(30,30,30,0.9) 100%);
+    border-radius: 16px;
+    padding: 20px 40px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    opacity: 1;
+    transition: opacity 0.5s;
+}
+#overlay.hidden { opacity: 0; }
+.team { text-align: center; min-width: 180px; }
+.team-name { font-size: 18px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.9; margin-bottom: 8px; }
+.score { font-size: 72px; font-weight: 900; line-height: 1; }
+.center { text-align: center; padding: 0 24px; border-left: 2px solid rgba(255,255,255,0.2); border-right: 2px solid rgba(255,255,255,0.2); }
+.period { font-size: 16px; opacity: 0.8; margin-bottom: 4px; }
+.timer { font-size: 42px; font-weight: 700; font-family: 'Courier New', monospace; }
+.shots { font-size: 12px; opacity: 0.7; margin-top: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.timeout-indicator {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 12px;
+    background: rgba(249, 115, 22, 0.9);
+    padding: 8px 24px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+    50% { opacity: 0.7; transform: translateX(-50%) scale(1.05); }
+}
+</style>
+</head>
+<body>
+<div id="overlay">
+    <div class="team">
+        <div class="team-name" id="homeName">Casa</div>
+        <div class="score" id="homeScore">0</div>
+        <div class="shots">Tiri: <span id="homeShots">0</span></div>
+    </div>
+    <div class="center">
+        <div class="period" id="period">1° Periodo</div>
+        <div class="timer" id="timer">20:00</div>
+    </div>
+    <div class="team">
+        <div class="team-name" id="awayName">Ospiti</div>
+        <div class="score" id="awayScore">0</div>
+        <div class="shots">Tiri: <span id="awayShots">0</span></div>
+    </div>
+</div>
+<div class="timeout-indicator" id="timeoutIndicator" style="display:none;">
+    Timeout · <span id="timeoutSeconds">30</span>s
+</div>
+<script>
+const ws = new WebSocket(`ws://${window.location.host}/api/v1/ws/game`);
+const overlay = document.getElementById('overlay');
+const timeoutIndicator = document.getElementById('timeoutIndicator');
+
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+function updateState(state) {
+    document.getElementById('homeName').textContent = state.homeName || 'Casa';
+    document.getElementById('awayName').textContent = state.awayName || 'Ospiti';
+    document.getElementById('homeScore').textContent = state.scoreHome ?? 0;
+    document.getElementById('awayScore').textContent = state.scoreAway ?? 0;
+    document.getElementById('homeShots').textContent = state.shotsHome ?? 0;
+    document.getElementById('awayShots').textContent = state.shotsAway ?? 0;
+    document.getElementById('period').textContent = (state.period || '1°') + ' Periodo';
+    document.getElementById('timer').textContent = formatTime(state.timerRemaining ?? 0);
+    
+    // Visibility control
+    if (state.obsVisible === false) {
+        overlay.classList.add('hidden');
+    } else {
+        overlay.classList.remove('hidden');
+    }
+    
+    // Timeout indicator
+    if (state.timeoutRemaining && state.timeoutRemaining > 0) {
+        document.getElementById('timeoutSeconds').textContent = state.timeoutRemaining;
+        timeoutIndicator.style.display = 'block';
+    } else {
+        timeoutIndicator.style.display = 'none';
+    }
+}
+
+ws.onmessage = (event) => {
+    try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'state' && msg.payload) {
+            updateState(msg.payload);
+        }
+    } catch (e) {
+        console.error('WS parse error:', e);
+    }
+};
+
+// Initial fetch
+fetch('/api/v1/game/state')
+    .then(r => r.json())
+    .then(state => updateState(state))
+    .catch(e => console.error('Initial fetch failed:', e));
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+@router.get("/obs/overlay/skating", response_class=HTMLResponse)
+def obs_overlay_skating():
+    """HTML overlay per OBS - Pattinaggio Pubblico"""
+    html = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>OBS Overlay - Pattinaggio</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { 
+    background: transparent; 
+    font-family: Arial, sans-serif; 
+    color: #fff;
+    overflow: hidden;
+}
+.message-box {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(37, 99, 235, 0.95) 100%);
+    border-radius: 20px;
+    padding: 24px 48px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    text-align: center;
+    max-width: 80%;
+    display: none;
+}
+.message-box.visible { display: block; animation: slideIn 0.5s ease-out; }
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(40px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.message-title {
+    font-size: 32px;
+    font-weight: 900;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+.message-content {
+    font-size: 24px;
+    line-height: 1.4;
+    opacity: 0.95;
+}
+.timer-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.9);
+    border-radius: 24px;
+    padding: 40px 80px;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.8);
+    text-align: center;
+    display: none;
+}
+.timer-box.visible { display: block; animation: zoomIn 0.4s ease-out; }
+@keyframes zoomIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.timer-label {
+    font-size: 28px;
+    opacity: 0.8;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+}
+.timer-value {
+    font-size: 120px;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+    line-height: 1;
+    color: #3b82f6;
+}
+</style>
+</head>
+<body>
+<div class="message-box" id="messageBox">
+    <div class="message-title" id="messageTitle">Pattinaggio Pubblico</div>
+    <div class="message-content" id="messageContent">Benvenuti!</div>
+</div>
+<div class="timer-box" id="timerBox">
+    <div class="timer-label">Tempo rimanente</div>
+    <div class="timer-value" id="timerValue">00:00</div>
+</div>
+<script>
+const ws = new WebSocket(`ws://${window.location.host}/api/v1/ws/display`);
+const messageBox = document.getElementById('messageBox');
+const timerBox = document.getElementById('timerBox');
+
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+ws.onmessage = (event) => {
+    try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'showView') {
+            const view = msg.payload?.view;
+            if (view === 'message') {
+                const title = msg.payload?.title || 'Pattinaggio Pubblico';
+                const content = msg.payload?.message || '';
+                document.getElementById('messageTitle').textContent = title;
+                document.getElementById('messageContent').textContent = content;
+                timerBox.classList.remove('visible');
+                messageBox.classList.add('visible');
+            } else if (view === 'timer') {
+                const seconds = msg.payload?.seconds ?? 0;
+                document.getElementById('timerValue').textContent = formatTime(seconds);
+                messageBox.classList.remove('visible');
+                timerBox.classList.add('visible');
+            } else if (view === 'clear') {
+                messageBox.classList.remove('visible');
+                timerBox.classList.remove('visible');
+            }
+        }
+    } catch (e) {
+        console.error('WS parse error:', e);
+    }
+};
+
+ws.onerror = () => console.error('WebSocket error');
+ws.onclose = () => console.log('WebSocket closed');
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 

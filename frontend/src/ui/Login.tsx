@@ -4,7 +4,7 @@ import { setToken } from '../auth'
 
 export default function Login(){
   const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('adimnadmin')
+  const [password, setPassword] = useState('adminadmin')
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
@@ -17,12 +17,15 @@ export default function Login(){
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       })
-      if(!r.ok){ throw new Error('Credenziali non valide') }
+      if(!r.ok){
+        const msg = r.status === 401 ? 'Credenziali non valide' : 'Server non disponibile'
+        throw new Error(msg)
+      }
   const data = await r.json()
   setToken(data.access_token, typeof data.expires_in==='number'? data.expires_in: undefined)
       navigate('/')
     }catch(err: any){
-      setError(err.message || 'Errore di login')
+      setError(err.message || 'Server non disponibile')
     }
   }
 

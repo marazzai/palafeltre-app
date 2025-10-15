@@ -11,7 +11,7 @@ class Folder(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    parent_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('folders.id', ondelete='CASCADE'), nullable=True)
+    parent_id: Mapped[int] = mapped_column(Integer, ForeignKey('folders.id', ondelete='CASCADE'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     parent = relationship('Folder', remote_side=[id], backref='children')
@@ -23,7 +23,7 @@ class Document(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(300), nullable=False)
-    folder_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('folders.id', ondelete='SET NULL'), nullable=True)
+    folder_id: Mapped[int] = mapped_column(Integer, ForeignKey('folders.id', ondelete='SET NULL'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -41,7 +41,7 @@ class DocumentVersion(Base):
     file_path: Mapped[str] = mapped_column(String(600), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(120), nullable=True)
     size: Mapped[int] = mapped_column(Integer, nullable=True)
-    author_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    author_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     document = relationship('Document', back_populates='versions')

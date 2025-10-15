@@ -37,7 +37,15 @@ class DALIService:
         g = self._groups.get(group_id)
         if not g:
             raise ValueError("Gruppo non trovato")
-        return int(g["level"])  # 0..100
+        val = g.get("level", 0)
+        if isinstance(val, int):
+            return val
+        if isinstance(val, (str, float)):
+            try:
+                return int(val)
+            except Exception:
+                return 0
+        return 0
 
     def set_group_level(self, group_id: int, level: int) -> None:
         if level < 0 or level > 100:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, date
-from sqlalchemy import Column, Integer, String, Text, Boolean, Date, DateTime, ForeignKey, Table
-from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy import Integer, String, Text, Boolean, Date, DateTime, ForeignKey, Table, Column
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..db.session import Base
 
 
@@ -17,28 +17,41 @@ task_assignees = Table(
 class Task(Base):
     __tablename__ = 'tasks'
 
-    id: Mapped[int] = Column(Integer, primary_key=True, index=True)
-    title: Mapped[str] = Column(String(200), nullable=False)
-    description: Mapped[str | None] = Column(Text, nullable=True)
-    priority: Mapped[str] = Column(String(10), default='medium')  # low|medium|high
-    due_date: Mapped[date | None] = Column(Date, nullable=True)
-    completed: Mapped[bool] = Column(Boolean, default=False)
-    created_at: Mapped[datetime] = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    creator_id: Mapped[int] = Column(Integer, ForeignKey('users.id'))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    priority: Mapped[str] = mapped_column(String(10), default='medium')  # low|medium|high
+    due_date: Mapped[date] = mapped_column(Date, nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    creator_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'))
 
     creator = relationship('User', backref='created_tasks')
     assignees = relationship('User', secondary=task_assignees, backref='assigned_tasks')
     comments = relationship('TaskComment', back_populates='task', cascade='all, delete-orphan')
+    attachments = relationship('TaskAttachment', back_populates='task', cascade='all, delete-orphan')
 
 
 class TaskComment(Base):
     __tablename__ = 'task_comments'
 
-    id: Mapped[int] = Column(Integer, primary_key=True, index=True)
-    task_id: Mapped[int] = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
-    author_id: Mapped[int] = Column(Integer, ForeignKey('users.id'))
-    content: Mapped[str] = Column(Text, nullable=False)
-    created_at: Mapped[datetime] = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id: Mapped[int] = mapped_column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
+    author_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'))
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     task = relationship('Task', back_populates='comments')
     author = relationship('User')
+
+
+class TaskAttachment(Base):
+    __tablename__ = 'task_attachments'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id: Mapped[int] = mapped_column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
+    file_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    task = relationship('Task', back_populates='attachments')

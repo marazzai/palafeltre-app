@@ -1,25 +1,36 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, Any
 import os
 import io
 
 try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-    from reportlab.lib.units import mm
+    # Use local aliases to avoid reassigning imported Finals and to keep pyright happy on Windows
+    from reportlab.lib.pagesizes import A4 as RL_A4  # type: ignore
+    from reportlab.lib import colors as RL_COLORS  # type: ignore
+    from reportlab.lib.styles import getSampleStyleSheet as rl_getSampleStyleSheet  # type: ignore
+    from reportlab.platypus import SimpleDocTemplate as RL_SimpleDocTemplate, Paragraph as RL_Paragraph, Spacer as RL_Spacer, Table as RL_Table, TableStyle as RL_TableStyle, Image as RL_Image  # type: ignore
+    from reportlab.lib.units import mm as RL_mm  # type: ignore
+    PDF_A4: Any = RL_A4
+    PDF_MM: float = float(RL_mm)  # type: ignore
+    pdf_colors = RL_COLORS  # type: ignore
+    getSampleStyleSheet = rl_getSampleStyleSheet  # type: ignore
+    SimpleDocTemplate = RL_SimpleDocTemplate  # type: ignore
+    Paragraph = RL_Paragraph  # type: ignore
+    Spacer = RL_Spacer  # type: ignore
+    Table = RL_Table  # type: ignore
+    TableStyle = RL_TableStyle  # type: ignore
+    Image = RL_Image  # type: ignore
     _REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover - environment fallback
-    A4 = (595.27, 841.89)
-    mm = 2.83465
-    class colors:  # type: ignore
+    PDF_A4 = (595.27, 841.89)
+    PDF_MM = 2.83465
+    class PDFColors:  # type: ignore
         lightgrey = (0.9, 0.9, 0.9)
         black = (0, 0, 0)
         grey = (0.5, 0.5, 0.5)
-    def getSampleStyleSheet():  # type: ignore
+    def getSampleStyleSheet() -> Any:  # type: ignore
         return {"Title": type("S", (), {})}
     class SimpleDocTemplate:  # type: ignore
         def __init__(self, *_args, **_kwargs): pass
@@ -67,7 +78,7 @@ def render_pdf_bytes(title: str, subtitle: str | None, table_headers: Sequence[s
     Returns PDF bytes.
     """
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=20*mm, bottomMargin=18*mm)
+    doc = SimpleDocTemplate(buf, pagesize=PDF_A4, leftMargin=18*PDF_MM, rightMargin=18*PDF_MM, topMargin=20*PDF_MM, bottomMargin=18*PDF_MM)
     styles = getSampleStyleSheet()
     story: list = []
 
@@ -75,7 +86,7 @@ def render_pdf_bytes(title: str, subtitle: str | None, table_headers: Sequence[s
     header_parts: list = []
     if logo_path and os.path.exists(logo_path):
         try:
-            header_parts.append(Image(logo_path, width=24*mm, height=24*mm))
+            header_parts.append(Image(logo_path, width=24*PDF_MM, height=24*PDF_MM))
         except Exception:
             pass
     header_text = f"<b>{title}</b>"
@@ -94,9 +105,9 @@ def render_pdf_bytes(title: str, subtitle: str | None, table_headers: Sequence[s
     if data:
         tbl = Table(data, repeatRows=1)
         tbl.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.black),
-            ('GRID', (0,0), (-1,-1), 0.25, colors.grey),
+            ('BACKGROUND', (0,0), (-1,0), pdf_colors.lightgrey),
+            ('TEXTCOLOR', (0,0), (-1,0), pdf_colors.black),
+            ('GRID', (0,0), (-1,-1), 0.25, pdf_colors.grey),
             ('ALIGN', (0,0), (-1,-1), 'LEFT'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
@@ -109,13 +120,13 @@ def render_pdf_bytes(title: str, subtitle: str | None, table_headers: Sequence[s
         canvas.saveState()
         ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
         canvas.setFont('Helvetica', 8)
-        canvas.setFillColor(colors.grey)
+        canvas.setFillColor(pdf_colors.grey)
         if footer_text:
-            canvas.drawString(18*mm, 10*mm, footer_text)
-            canvas.drawRightString(A4[0]-18*mm, 10*mm, f"Generato: {ts} • Pagina {doc_.page}")
+            canvas.drawString(18*PDF_MM, 10*PDF_MM, footer_text)
+            canvas.drawRightString(PDF_A4[0]-18*PDF_MM, 10*PDF_MM, f"Generato: {ts} • Pagina {doc_.page}")
         else:
-            canvas.drawString(18*mm, 10*mm, f"Generato: {ts}")
-            canvas.drawRightString(A4[0]-18*mm, 10*mm, f"Pagina {doc_.page}")
+            canvas.drawString(18*PDF_MM, 10*PDF_MM, f"Generato: {ts}")
+            canvas.drawRightString(PDF_A4[0]-18*PDF_MM, 10*PDF_MM, f"Pagina {doc_.page}")
         canvas.restoreState()
 
     try:
