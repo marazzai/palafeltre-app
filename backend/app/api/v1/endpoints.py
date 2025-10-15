@@ -21,6 +21,7 @@ from ...services.dali import service as dali_service
 from ...core.config import settings
 import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
+from fastapi import Form
 
 router = APIRouter()
 
@@ -1041,7 +1042,6 @@ def admin_branding_set(data: BrandingUpdate, db: Session = Depends(get_db), curr
     db.commit(); return {"ok": True}
 
 # Skating audio file manager (simple storage under /app/storage/audio/skating)
-from fastapi import Form
 
 @router.get('/admin/skating/audio')
 def skating_audio_list(db: Session = Depends(get_db), _: User = Depends(require_admin)):
@@ -1288,6 +1288,11 @@ class GameState(BaseModel):
     period_index: int = 1  # 1,2,3,4(OT)
     score_home: int = 0
     score_away: int = 0
+    shots_home: int = 0
+    shots_away: int = 0
+    timeout_remaining: int = 0  # seconds, 0 when no timeout running
+    siren_on: bool = False
+    obs_visible: bool = True
     timer_running: bool = False
     timer_remaining: int = 20*60
     penalties: List[Penalty] = []
@@ -1305,11 +1310,16 @@ def _snapshot_state() -> dict:
         "awayName": game_state.away_name,
         "scoreHome": game_state.score_home,
         "scoreAway": game_state.score_away,
+        "shotsHome": game_state.shots_home,
+        "shotsAway": game_state.shots_away,
         "period": game_state.period_label(),
         "periodIndex": game_state.period_index,
         "timerRunning": game_state.timer_running,
         "timerRemaining": game_state.timer_remaining,
         "periodDuration": game_state.period_duration_seconds,
+        "timeoutRemaining": game_state.timeout_remaining,
+        "sirenOn": game_state.siren_on,
+        "obsVisible": game_state.obs_visible,
         "penalties": [p.model_dump() for p in game_state.penalties],
     }
 
@@ -1585,6 +1595,108 @@ async def game_update_score(data: ScoreUpdate, _: User = Depends(require_admin))
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
 
+class ShotsUpdate(BaseModel):
+    team: str  # 'home'|'away'
+    delta: int  # +1 or -1
+
+@router.post("/game/shots")
+async def game_update_shots(data: ShotsUpdate, _: User = Depends(require_admin)):
+    async with game_lock:
+        if data.team not in ("home","away"):
+            raise HTTPException(status_code=400, detail="Team non valido")
+        if data.team == 'home':
+            game_state.shots_home = max(0, game_state.shots_home + data.delta)
+        else:
+            game_state.shots_away = max(0, game_state.shots_away + data.delta)
+        await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+    return {"ok": True}
+
+# ===================== TICKET ATTACHMENTS =====================
+@router.get('/tickets/{ticket_id}/attachments')
+def ticket_attachments_list(ticket_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    rows = db.query(TicketAttachment).filter(TicketAttachment.ticket_id == ticket_id).order_by(TicketAttachment.uploaded_at.asc()).all()
+    return [{"id": r.id, "file_name": r.file_name, "uploaded_at": r.uploaded_at} for r in rows]
+
+@router.post('/tickets/{ticket_id}/attachments')
+def ticket_attachments_upload(ticket_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    # Save under storage/tickets
+    base = os.path.join(settings.storage_path, 'tickets')
+    os.makedirs(base, exist_ok=True)
+    name = file.filename or 'file'
+    dest = os.path.join(base, f"{ticket_id}_{name}")
+    with open(dest, 'wb') as fh:
+        shutil.copyfileobj(file.file, fh)
+    att = TicketAttachment(ticket_id=ticket_id, file_name=name, file_path=dest)
+    db.add(att); db.commit(); db.refresh(att)
+    return {"id": att.id, "file_name": att.file_name}
+
+@router.get('/tickets/attachments/{att_id}')
+def ticket_attachments_download(att_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    att = db.query(TicketAttachment).get(att_id)
+    if not att or not os.path.exists(att.file_path):
+        raise HTTPException(status_code=404, detail='Allegato non trovato')
+    mt = 'application/octet-stream'
+    return FileResponse(att.file_path, media_type=mt, filename=att.file_name)
+
+# ===================== LOCKER ROOM MONITORS =====================
+@router.get('/monitors/presets')
+def monitors_presets(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    row = db.query(AppSetting).filter(AppSetting.key == 'monitors.presets').first()
+    import json
+    try:
+        return {"items": json.loads(row.value) if row and row.value else []}
+    except Exception:
+        return {"items": []}
+
+@router.put('/monitors/presets')
+def monitors_presets_set(payload: dict, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    import json
+    items = payload.get('items')
+    try:
+        raw = json.dumps(items or [])
+    except Exception:
+        raw = '[]'
+    row = db.query(AppSetting).filter(AppSetting.key == 'monitors.presets').first()
+    if row: row.value = raw
+    else: db.add(AppSetting(key='monitors.presets', value=raw))
+    db.commit(); return {"ok": True}
+
+@router.get('/monitors/{name}')
+def monitor_get(name: str, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    base = os.path.join(settings.storage_path, 'monitors')
+    os.makedirs(base, exist_ok=True)
+    path = os.path.join(base, f'{name}.txt')
+    content = ''
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                content = fh.read()
+        except Exception:
+            content = ''
+    return {"name": name, "content": content}
+
+@router.post('/monitors/{name}')
+def monitor_set(name: str, content: str = Form(''), db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    base = os.path.join(settings.storage_path, 'monitors')
+    os.makedirs(base, exist_ok=True)
+    path = os.path.join(base, f'{name}.txt')
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write(content or '')
+    return {"ok": True}
+
+@router.post('/monitors/clear_all')
+def monitors_clear_all(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    base = os.path.join(settings.storage_path, 'monitors')
+    if not os.path.exists(base):
+        return {"ok": True}
+    for n in os.listdir(base):
+        if n.endswith('.txt'):
+            try:
+                open(os.path.join(base, n), 'w').close()
+            except Exception:
+                pass
+    return {"ok": True}
+
 @router.post("/game/timer/start")
 async def game_timer_start(_: User = Depends(require_admin)):
     async with game_lock:
@@ -1597,6 +1709,40 @@ async def game_timer_stop(_: User = Depends(require_admin)):
     async with game_lock:
         game_state.timer_running = False
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+    return {"ok": True}
+
+@router.post("/game/timeout/start")
+async def game_timeout_start(_: User = Depends(require_admin)):
+    async with game_lock:
+        game_state.timeout_remaining = 30
+        await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
+    return {"ok": True}
+
+@router.post("/game/timeout/stop")
+async def game_timeout_stop(_: User = Depends(require_admin)):
+    async with game_lock:
+        game_state.timeout_remaining = 0
+        await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
+    return {"ok": True}
+
+class SirenToggle(BaseModel):
+    on: bool
+
+@router.post("/game/siren")
+async def game_siren_set(data: SirenToggle, _: User = Depends(require_admin)):
+    async with game_lock:
+        game_state.siren_on = bool(data.on)
+        await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
+    return {"ok": True}
+
+class ObsToggle(BaseModel):
+    visible: bool
+
+@router.post("/game/obs")
+async def game_obs_set(data: ObsToggle, _: User = Depends(require_admin)):
+    async with game_lock:
+        game_state.obs_visible = bool(data.visible)
+        await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
     return {"ok": True}
 
 @router.post("/game/timer/reset")
@@ -1652,6 +1798,12 @@ async def game_scheduler():
                 if game_state.timer_remaining <= 0:
                     game_state.timer_remaining = 0
                     game_state.timer_running = False
+                changed = True
+            # timeout countdown
+            if game_state.timeout_remaining > 0:
+                game_state.timeout_remaining -= 1
+                if game_state.timeout_remaining < 0:
+                    game_state.timeout_remaining = 0
                 changed = True
             # penalties
             for p in list(game_state.penalties):
