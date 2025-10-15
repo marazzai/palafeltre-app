@@ -44,17 +44,53 @@ function token(){
 function UsersSection(){
   const [q, setQ] = useState('')
   const [items, setItems] = useState<User[]>([])
-  useEffect(()=>{
-    const controller = new AbortController()
-    fetch(`/api/v1/users?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token()}` }, signal: controller.signal })
-      .then(r=>r.json()).then(setItems).catch(()=>{})
-    return ()=>controller.abort()
-  },[q])
+  const [roles, setRoles] = useState<Role[]>([])
+  const reload = async ()=>{
+    const list = await fetch(`/api/v1/users?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json()).catch(()=>[])
+    setItems(Array.isArray(list)? list: [])
+  }
+  useEffect(()=>{ reload() },[q])
+  useEffect(()=>{ fetch(`/api/v1/roles`, { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json()).then(setRoles).catch(()=>{}) },[])
+
+  // Create user modal
+  const [showCreate, setShowCreate] = useState(false)
+  const [nu, setNu] = useState({ username:'', email:'', full_name:'', password:'' })
+  const createUser = async ()=>{
+    if(!nu.username.trim() || !nu.email.trim() || !nu.password.trim()) return
+    await fetch('/api/v1/users', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(nu) })
+    setShowCreate(false); setNu({ username:'', email:'', full_name:'', password:'' }); reload()
+  }
+
+  // Roles modal
+  const [rolesFor, setRolesFor] = useState<User|null>(null)
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([])
+  const openRoles = (u: User)=>{
+    setRolesFor(u)
+    const ids = roles.filter(r=> (u.roles||[]).includes(r.name)).map(r=> r.id)
+    setSelectedRoleIds(ids)
+  }
+  const toggleRole = (id:number)=> setSelectedRoleIds(prev=> prev.includes(id)? prev.filter(x=>x!==id): [...prev,id])
+  const saveRoles = async ()=>{
+    if(!rolesFor) return
+    await fetch(`/api/v1/users/${rolesFor.id}/roles`, { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ role_ids: selectedRoleIds }) })
+    setRolesFor(null); reload()
+  }
+
+  // Actions
+  const toggleActive = async (u: User)=>{
+    await fetch(`/api/v1/users/${u.id}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ is_active: !u.is_active }) })
+    reload()
+  }
+  const resetPw = async (u: User)=>{
+    const npw = prompt(`Nuova password per ${u.username||u.email}?`); if(!npw) return
+    await fetch(`/api/v1/admin/users/${u.id}/reset_password`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ new_password: npw }) })
+    alert('Password aggiornata')
+  }
   return (
     <div>
       <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:8}}>
         <input placeholder="Cerca utente..." value={q} onChange={e=>setQ(e.target.value)} />
-        <button className="btn">Aggiungi Utente</button>
+        <button className="btn" onClick={()=> setShowCreate(true)}>Aggiungi Utente</button>
       </div>
       <div className="table">
         <div className="thead"><div>Username</div><div>Nome</div><div>Email</div><div>Ruoli</div><div>Stato</div><div>Azioni</div></div>
@@ -65,10 +101,52 @@ function UsersSection(){
             <div>{u.email}</div>
             <div>{u.roles.join(', ')}</div>
             <div>{u.is_active? 'Attivo':'Disattivo'}</div>
-            <div><button className="btn btn-outline">Modifica</button></div>
+            <div style={{display:'flex', gap:6}}>
+              <button className="btn btn-outline" onClick={()=> openRoles(u)}>Ruoli</button>
+              <button className="btn btn-outline" onClick={()=> resetPw(u)}>Reset PW</button>
+              <button className="btn btn-outline" onClick={()=> toggleActive(u)}>{u.is_active? 'Disattiva':'Attiva'}</button>
+            </div>
           </div>
         ))}
       </div>
+
+      {showCreate && (
+        <div className="modal is-open" onClick={()=> setShowCreate(false)}>
+          <div className="modal-content" onClick={e=> e.stopPropagation()}>
+            <div className="modal-header"><strong>Crea utente</strong></div>
+            <div className="modal-body" style={{display:'grid', gap:8}}>
+              <label>Username<input className="input" value={nu.username} onChange={e=> setNu({...nu, username: e.target.value})} /></label>
+              <label>Email<input className="input" value={nu.email} onChange={e=> setNu({...nu, email: e.target.value})} /></label>
+              <label>Nome completo<input className="input" value={nu.full_name} onChange={e=> setNu({...nu, full_name: e.target.value})} /></label>
+              <label>Password<input className="input" type="password" value={nu.password} onChange={e=> setNu({...nu, password: e.target.value})} /></label>
+            </div>
+            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+              <button className="btn btn-outline" onClick={()=> setShowCreate(false)}>Annulla</button>
+              <button className="btn" onClick={createUser} disabled={!nu.username.trim() || !nu.email.trim() || !nu.password.trim()}>Crea</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rolesFor && (
+        <div className="modal is-open" onClick={()=> setRolesFor(null)}>
+          <div className="modal-content" onClick={e=> e.stopPropagation()}>
+            <div className="modal-header"><strong>Ruoli per {rolesFor.username||rolesFor.email}</strong></div>
+            <div className="modal-body" style={{display:'grid', gap:6}}>
+              {roles.map(r=> (
+                <label key={r.id} style={{display:'flex', alignItems:'center', gap:8}}>
+                  <input type="checkbox" checked={selectedRoleIds.includes(r.id)} onChange={()=> toggleRole(r.id)} />
+                  <span>{r.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+              <button className="btn btn-outline" onClick={()=> setRolesFor(null)}>Annulla</button>
+              <button className="btn" onClick={saveRoles}>Salva</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
