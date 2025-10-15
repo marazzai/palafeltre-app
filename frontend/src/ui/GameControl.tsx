@@ -58,13 +58,12 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
 export function GameControl(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
-  const [token, setToken] = useState<string>('')
   const [setup, setSetup] = useState({ home:'Casa', away:'Ospiti', duration:'20:00' })
   const [penModal, setPenModal] = useState<{ team:'home'|'away'; open:boolean }>({ team:'home', open:false })
   const [pen, setPen] = useState<{ number:string; minutes:number }>({ number:'', minutes:2 })
   const [log, setLog] = useState<Array<{ ts:number; text:string }>>([])
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  const token = localStorage.getItem('token') || ''
   useEffect(() => {
     fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState(normalizeState(s))).catch(() => {})
   }, [])
@@ -165,9 +164,7 @@ export function GameControl(){
 
       <div className="card" style={{marginBottom:16}}>
         <div className="card-body" style={{display:'flex', gap:8, alignItems:'center'}}>
-          <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
-          <span className="text-muted" style={{fontSize:12}}>WS: {status}</span>
+          <span className="text-muted" style={{fontSize:12}}>WS: {status} | Token: {token ? '✓' : '✗'}</span>
         </div>
       </div>
 
