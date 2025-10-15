@@ -36,8 +36,6 @@ export function AppLayout(){
           <NavLink to="/tasks" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="checklist" /> Incarichi</NavLink>
           <NavLink to="/documents" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="files" /> Documenti</NavLink>
           <NavLink to="/shifts" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="tasks" /> Turni</NavLink>
-          <NavLink to="/my-shifts" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="tasks" /> I miei turni</NavLink>
-          <NavLink to="/availability" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="tasks" /> Disponibilità</NavLink>
           <NavLink to="/game" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="tasks" /> Partita</NavLink>
           <NavLink to="/lights" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="tasks" /> Controllo Luci</NavLink>
           <NavLink to="/skating" onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="skate" /> Pattinaggio</NavLink>

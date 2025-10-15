@@ -80,6 +80,7 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int | None = None
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -88,7 +89,13 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=token, expires_in=settings.access_token_expire_minutes*60)
+
+@router.post("/auth/refresh", response_model=TokenResponse)
+def refresh_token(current: User = Depends(get_current_user)):
+    # Simple refresh that issues a new token when the old one is still valid
+    token = create_access_token(str(current.id))
+    return TokenResponse(access_token=token, expires_in=settings.access_token_expire_minutes*60)
 
 @router.get("/me", response_model=UserOut)
 def me(current: User = Depends(get_current_user)):
@@ -195,12 +202,12 @@ def create_role(data: RoleCreate, db: Session = Depends(get_db), _: User = Depen
     return {"id": role.id, "name": role.name}
 
 @router.get("/roles")
-def list_roles(db: Session = Depends(get_db)):
+def list_roles(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     roles = db.query(Role).all()
     return [{"id": r.id, "name": r.name, "permissions": [p.code for p in r.permissions]} for r in roles]
 
 @router.get("/roles/{role_id}")
-def get_role(role_id: int, db: Session = Depends(get_db)):
+def get_role(role_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     role = db.query(Role).get(role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Ruolo non trovato")
@@ -233,7 +240,7 @@ def create_permission(data: PermissionCreate, db: Session = Depends(get_db), _: 
     return {"id": perm.id, "code": perm.code}
 
 @router.get("/permissions")
-def list_permissions(db: Session = Depends(get_db)):
+def list_permissions(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     perms = db.query(Permission).all()
     return [{"id": p.id, "code": p.code, "description": p.description} for p in perms]
 
@@ -301,7 +308,7 @@ async def upload_ics(file: UploadFile = File(...), db: Session = Depends(get_db)
     return {"imported": len(events)}
 
 @router.get("/skating/events")
-def list_skating_events(db: Session = Depends(get_db)):
+def list_skating_events(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     rows = db.query(SkatingEvent).order_by(SkatingEvent.start_time.asc()).all()
     return [
         {"id": r.id, "title": r.title, "start_time": r.start_time.isoformat(), "end_time": r.end_time.isoformat()}
@@ -426,6 +433,17 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), _
     db.commit()
     db.refresh(user)
     return UserOut(id=user.id, email=user.email, full_name=user.full_name, is_active=user.is_active, roles=[r.name for r in user.roles])
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+@router.post("/admin/users/{user_id}/reset_password")
+def admin_reset_password(user_id: int, data: ResetPasswordRequest, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    user = db.query(User).get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    user.hashed_password = hash_password(data.new_password)
+    db.add(user); db.commit(); return {"ok": True}
 
 @router.put("/users/{user_id}/roles")
 def set_user_roles(user_id: int, data: UserRolesUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
@@ -1517,7 +1535,7 @@ def dali_recall_scene(scene_id: int, _: User = Depends(require_admin)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/game/state")
-def game_get_state():
+def game_get_state(_: User = Depends(get_current_user)):
     return _snapshot_state()
 
 class ScoreUpdate(BaseModel):

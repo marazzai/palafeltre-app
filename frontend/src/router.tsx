@@ -12,8 +12,8 @@ import { TasksPage } from './ui/TasksPage'
 import { MaintenanceKanban } from './ui/MaintenanceKanban'
 import { DocumentsPage } from './ui/DocumentsPage'
 import { ShiftsCalendar } from './ui/ShiftsCalendar'
-import { MyShifts } from './ui/MyShifts'
-import { AvailabilityPage } from './ui/AvailabilityPage'
+import ShiftsPage from './ui/ShiftsPage'
+import Profile from './ui/Profile'
 import Login from './ui/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -35,7 +35,7 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute />,
         children: [
           { index: true, element: <Dashboard /> },
-          { path: 'profile', element: <Placeholder title="Profilo Utente" /> },
+          { path: 'profile', element: <Profile /> },
           // Merge admin-related placeholders under AdminPanel later
           { path: 'maintenance', element: <MaintenanceKanban /> },
           { path: 'tasks', element: <TasksPage /> },
@@ -47,9 +47,7 @@ export const router = createBrowserRouter([
           { path: 'game', element: <GameControl /> },
           { path: 'scoreboard', element: <GameScoreboard /> },
           { path: 'lights', element: <LightsControl /> },
-          { path: 'shifts', element: <ShiftsCalendar /> },
-          { path: 'my-shifts', element: <MyShifts /> },
-          { path: 'availability', element: <AvailabilityPage /> },
+          { path: 'shifts', element: <ShiftsPage /> },
           { path: 'admin', element: <AdminPanel /> },
         ],
       },
