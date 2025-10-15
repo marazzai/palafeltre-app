@@ -18,6 +18,11 @@ class Settings:
         self._cors_origins: List[str] = _parse_csv(
             os.getenv("CORS_ORIGINS"), ["http://localhost:8080"]
         )
+        # Regex fallback to allow local network hosts (use env to override in production)
+        self.cors_origin_regex: str = os.getenv(
+            "CORS_ORIGIN_REGEX",
+            r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?|https?://192\.168\.[0-9]+\.[0-9]+(:\d+)?",
+        )
         self.jwt_secret: str = os.getenv("JWT_SECRET", "change-me-in-prod")
         self.jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
         self.access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
