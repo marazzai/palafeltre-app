@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, inspect
 from ...db.session import SessionLocal
 from ...models.rbac import User, Role, Permission
 from ...models.settings import AppSetting, AuditLog
@@ -23,6 +23,18 @@ import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
 
 router = APIRouter()
+
+def _has_username_column(db: Session) -> bool:
+    try:
+        bind = db.get_bind()
+        if bind is None:
+            return True
+        insp = inspect(bind)
+        cols = [c['name'] for c in insp.get_columns('users')]
+        return 'username' in cols
+    except Exception:
+        # Default to True to align with current model; avoids breaking user creation/login on modern deployments
+        return True
 
 def get_db():
     db = SessionLocal()
@@ -88,8 +100,12 @@ class TokenResponse(BaseModel):
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    # Accept username or email as identifier to ease migration
-    user = db.query(User).filter(or_(User.username == data.username, User.email == data.username)).first()
+    # Accept username or email as identifier to ease migration; avoid referencing missing column
+    user = None
+    if _has_username_column(db):
+        user = db.query(User).filter(User.username == data.username).first()
+    if not user:
+        user = db.query(User).filter(User.email == data.username).first()
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     token = create_access_token(str(user.id))
@@ -159,9 +175,15 @@ def forgot_password(_: ForgotPasswordRequest):
 
 @router.post("/users", response_model=UserOut)
 def create_user(data: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    if db.query(User).filter((User.email == data.email) | (User.username == data.username)).first():
-        raise HTTPException(status_code=400, detail="Username o email già in uso")
-    user = User(username=data.username, email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
+    if _has_username_column(db):
+        if db.query(User).filter((User.email == data.email) | (User.username == data.username)).first():
+            raise HTTPException(status_code=400, detail="Username o email già in uso")
+        user = User(username=data.username, email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
+    else:
+        if db.query(User).filter(User.email == data.email).first():
+            raise HTTPException(status_code=400, detail="Email già in uso")
+        # Username not supported without migration
+        user = User(email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -174,9 +196,14 @@ def list_users(db: Session = Depends(get_db), q: str | None = None, page: int = 
     if q:
         like = f"%{q.lower()}%"
         from sqlalchemy import func
-        query = query.filter(
-            func.lower(User.email).like(like) | func.lower(User.full_name).like(like) | func.lower(User.username).like(like)
-        )
+        if _has_username_column(db):
+            query = query.filter(
+                func.lower(User.email).like(like) | func.lower(User.full_name).like(like) | func.lower(User.username).like(like)
+            )
+        else:
+            query = query.filter(
+                func.lower(User.email).like(like) | func.lower(User.full_name).like(like)
+            )
     total = query.count()
     rows = query.order_by(User.id.asc()).offset(max(0, (page-1)*page_size)).limit(page_size).all()
     result: list[UserOut] = []

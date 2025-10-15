@@ -18,8 +18,8 @@ export default function Login(){
         body: JSON.stringify({ username, password })
       })
       if(!r.ok){ throw new Error('Credenziali non valide') }
-      const data = await r.json()
-      setToken(data.access_token)
+  const data = await r.json()
+  setToken(data.access_token, typeof data.expires_in==='number'? data.expires_in: undefined)
       navigate('/')
     }catch(err: any){
       setError(err.message || 'Errore di login')
