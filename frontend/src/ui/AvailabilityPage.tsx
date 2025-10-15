@@ -14,8 +14,14 @@ export function AvailabilityPage(){
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function load(){
-    const res = await fetch('/api/v1/my/availability', { headers: authHeader })
-    if(res.ok){ setBlocks(await res.json()) }
+    try{
+      const res = await fetch('/api/v1/availability', { headers: authHeader })
+      if(!res.ok) throw new Error('unauthorized')
+      const data = await res.json()
+      setBlocks(Array.isArray(data) ? data : [])
+    }catch{
+      setBlocks([])
+    }
   }
   useEffect(() => { if(token) load() }, [token])
 
@@ -33,7 +39,7 @@ export function AvailabilityPage(){
   function remove(b: Block){ setBlocks(blocks.filter((x: Block) => x!==b)) }
 
   async function save(){
-  await fetch('/api/v1/my/availability', { method:'PUT', headers: { 'Content-Type':'application/json', ...(authHeader||{}) }, body: JSON.stringify(blocks.map((b: Block) => ({ day_of_week:b.day_of_week, start_time:b.start_time, end_time:b.end_time }))) })
+    await fetch('/api/v1/availability', { method:'PUT', headers: { 'Content-Type':'application/json', ...(authHeader||{}) }, body: JSON.stringify(blocks.map((b: Block) => ({ weekday:b.day_of_week, start_minute: Number(b.start_time.slice(0,2))*60 + Number(b.start_time.slice(3,5)), end_minute: Number(b.end_time.slice(0,2))*60 + Number(b.end_time.slice(3,5)), available: true }))) })
     alert('Disponibilità salvata')
   }
 
