@@ -85,7 +85,7 @@ export function Dashboard(){
         <div className="card" style={{padding:16}}>
           <h3 style={{marginTop:0}}>Ultimi documenti caricati</h3>
           <ul style={{margin:0, paddingLeft:18}}>
-            {(summary?.recent_documents ?? []).slice(0,3).map((d,i) => (
+            {(Array.isArray(summary?.recent_documents) ? summary!.recent_documents : []).slice(0,3).map((d,i) => (
               <li key={i}><a href={d.path}>{d.name}</a></li>
             ))}
           </ul>
