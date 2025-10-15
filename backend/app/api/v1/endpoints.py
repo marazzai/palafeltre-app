@@ -1459,8 +1459,8 @@ class CategoryIn(BaseModel):
 class CategoryOut(BaseModel):
     id: int
     name: str
-    color: str | None
-    sort_order: int
+    color: str | None = None
+    sort_order: int = 0
     class Config:
         from_attributes = True
 
