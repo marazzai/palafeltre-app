@@ -36,12 +36,18 @@ export function SkatingControl(){
   }, [])
 
   async function refreshEvents(){
-    const res = await fetch('/api/v1/skating/events')
-    const data = await res.json()
-    setEvents(data)
+    try{
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+      const res = await fetch('/api/v1/skating/events', { headers })
+      if(!res.ok) throw new Error('unauthorized')
+      const data = await res.json()
+      setEvents(Array.isArray(data) ? data : [])
+    }catch{
+      setEvents([])
+    }
   }
 
-  useEffect(() => { refreshEvents() }, [])
+  useEffect(() => { refreshEvents() }, [token])
 
   async function onUpload(file: File){
     setUploading(true)
