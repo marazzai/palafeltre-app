@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { getToken } from '../auth'
 
 type Summary = {
   greeting: string
@@ -16,9 +17,11 @@ export function Dashboard(){
   const [now, setNow] = useState<Date>(new Date())
 
   useEffect(() => {
-    fetch('/api/v1/dashboard/summary')
-      .then(r => r.json())
-      .then(setSummary)
+    const t = getToken()
+    const headers = t ? { Authorization: `Bearer ${t}` } : undefined
+    fetch('/api/v1/dashboard/summary', { headers })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data) => setSummary(data))
       .catch(() => setSummary(null))
   }, [])
 
@@ -56,27 +59,27 @@ export function Dashboard(){
           <div style={{fontSize:24, fontWeight:700}}>{countdown ?? '—'}</div>
         </a>
 
-        <a href={summary?.maintenance.link ?? '/maintenance'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
+        <a href={summary?.maintenance?.link ?? '/maintenance'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
           <h3 style={{marginTop:0, display:'flex', alignItems:'center', gap:8}}><Icon name="wrench"/> Stato manutenzioni</h3>
           <p className="text-muted">Segnalazioni aperte</p>
           <div style={{display:'flex', gap:16}}>
-            <div><strong style={{fontSize:22}}>{summary?.maintenance.open ?? 0}</strong> totali</div>
-            <div><strong style={{fontSize:22, color:'var(--color-danger)'}}>{summary?.maintenance.high_priority ?? 0}</strong> alta priorità</div>
+            <div><strong style={{fontSize:22}}>{summary?.maintenance?.open ?? 0}</strong> totali</div>
+            <div><strong style={{fontSize:22, color:'var(--color-danger)'}}>{summary?.maintenance?.high_priority ?? 0}</strong> alta priorità</div>
           </div>
         </a>
 
-        <a href={summary?.my_tasks.link ?? '/tasks'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
+        <a href={summary?.my_tasks?.link ?? '/tasks'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
           <h3 style={{marginTop:0}}>I miei incarichi</h3>
           <div style={{display:'flex', gap:16}}>
-            <div><strong style={{fontSize:22}}>{summary?.my_tasks.assigned ?? 0}</strong> assegnati</div>
-            <div><strong style={{fontSize:22, color:'var(--color-warning)'}}>{summary?.my_tasks.due_soon ?? 0}</strong> in scadenza</div>
+            <div><strong style={{fontSize:22}}>{summary?.my_tasks?.assigned ?? 0}</strong> assegnati</div>
+            <div><strong style={{fontSize:22, color:'var(--color-warning)'}}>{summary?.my_tasks?.due_soon ?? 0}</strong> in scadenza</div>
           </div>
         </a>
 
-        <a href={summary?.checklists.link ?? '/checklists'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
+        <a href={summary?.checklists?.link ?? '/checklists'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
           <h3 style={{marginTop:0}}>Checklist da completare</h3>
           <p className="text-muted">Oggi</p>
-          <div style={{fontSize:22, fontWeight:700}}>{summary?.checklists.pending_today ?? 0}</div>
+          <div style={{fontSize:22, fontWeight:700}}>{summary?.checklists?.pending_today ?? 0}</div>
         </a>
 
         <div className="card" style={{padding:16}}>
