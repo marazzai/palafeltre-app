@@ -6,6 +6,7 @@ from .core.logging_config import setup_logging
 from .api.v1.router import api_router
 from .db.session import Base, engine, SessionLocal
 from .models.rbac import User, Role
+from .models.skates import SkateInventory, SkateRental
 from .core.security import hash_password
 from .api.v1.endpoints import skating_scheduler, game_scheduler, backup_scheduler, recurring_tasks_scheduler
 import asyncio
