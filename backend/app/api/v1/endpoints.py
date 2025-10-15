@@ -1661,7 +1661,8 @@ def dali_recall_scene(scene_id: int, _: User = Depends(require_admin)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/game/state")
-def game_get_state(_: User = Depends(get_current_user)):
+def game_get_state():
+    """Get current game state (public endpoint for scoreboard display)"""
     return _snapshot_state()
 
 class ScoreUpdate(BaseModel):
