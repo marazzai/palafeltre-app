@@ -31,7 +31,7 @@ export default function Login(){
       <h2>Accedi</h2>
       <form onSubmit={onSubmit} className="card" style={{padding:16, display:'grid', gap:12}}>
         <label>
-          Username
+          Username (o Email)
           <input value={username} onChange={e=>setUsername(e.target.value)} required />
         </label>
         <label>

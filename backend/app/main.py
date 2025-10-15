@@ -43,8 +43,17 @@ def on_startup():
         # ensure superuser with username 'admin'
         admin = db.query(User).filter(User.username == 'admin').first()
         if not admin:
-            admin = User(username='admin', email='admin@example.com', full_name='Admin', hashed_password=hash_password('adimnadmin'), is_active=True)
-            db.add(admin); db.commit(); db.refresh(admin)
+            # try migrate legacy admin by email
+            admin = db.query(User).filter(User.email.in_(['admin@example.com','admin@palafeltre.local'])).first()
+            if admin:
+                admin.username = 'admin'
+                admin.hashed_password = hash_password('adimnadmin')
+                if not admin.email:
+                    admin.email = 'admin@example.com'
+                db.add(admin); db.commit(); db.refresh(admin)
+            else:
+                admin = User(username='admin', email='admin@example.com', full_name='Admin', hashed_password=hash_password('adimnadmin'), is_active=True)
+                db.add(admin); db.commit(); db.refresh(admin)
         # ensure admin role bound
         if not any(r.name=='admin' for r in admin.roles):
             admin.roles.append(admin_role); db.add(admin); db.commit()

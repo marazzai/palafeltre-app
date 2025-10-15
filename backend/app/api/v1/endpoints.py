@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from ...db.session import SessionLocal
 from ...models.rbac import User, Role, Permission
 from ...models.settings import AppSetting, AuditLog
@@ -87,7 +88,8 @@ class TokenResponse(BaseModel):
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == data.username).first()
+    # Accept username or email as identifier to ease migration
+    user = db.query(User).filter(or_(User.username == data.username, User.email == data.username)).first()
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     token = create_access_token(str(user.id))
