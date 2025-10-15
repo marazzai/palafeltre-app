@@ -59,6 +59,13 @@ Thumbs.db
 build/
 coverage/
 
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+.coverage
+htmlcov/
+
 # App storage (keep folder, ignore contents)
 storage/**
 !storage/.gitkeep
