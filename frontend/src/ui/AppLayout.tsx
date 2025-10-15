@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { clearToken, getToken, getTokenExpiry, setToken } from '../auth'
+import { useNotifications } from '../utils/useNotifications'
+import { NotificationCenter } from '../components/NotificationCenter'
 
 type UserInfo = {
   id: number
@@ -28,6 +30,7 @@ const menuItems: MenuItem[] = [
   { path: '/game', label: 'Partita', icon: 'tasks' },
   { path: '/lights', label: 'Controllo Luci', icon: 'tasks' },
   { path: '/skating', label: 'Pattinaggio', icon: 'skate' },
+  { path: '/skate-rental', label: 'Noleggio Pattini', icon: 'skate' },
   { path: '/admin', label: 'Admin', icon: 'settings', requireAdmin: true },
 ]
 
@@ -35,6 +38,9 @@ export function AppLayout(){
   const [open, setOpen] = useState(false)
   const [user, setUser] = useState<UserInfo | null>(null)
   const navigate = useNavigate()
+  
+  // Notifications system
+  const { notifications, unreadCount, markAsRead, clearAll, removeNotification } = useNotifications(user?.id || null)
   
   useEffect(()=>{
     const t = getToken()
@@ -115,6 +121,15 @@ export function AppLayout(){
               {user ? `Ciao, ${user.username}` : 'Benvenuto'}
               {remaining!=null? ` · ${Math.floor((remaining||0)/60)}:${String((remaining||0)%60).padStart(2,'0')}` : ''}
             </span>
+            {getToken() && (
+              <NotificationCenter
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onMarkAsRead={markAsRead}
+                onClearAll={clearAll}
+                onRemove={removeNotification}
+              />
+            )}
             {!getToken() ? (
               <button className="btn" onClick={()=>navigate('/login')}>Accedi</button>
             ) : (

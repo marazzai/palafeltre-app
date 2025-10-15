@@ -14,6 +14,7 @@ import { MaintenanceKanban } from './ui/MaintenanceKanban'
 import { DocumentsPage } from './ui/DocumentsPage'
 import { ShiftsCalendar } from './ui/ShiftsCalendar'
 import ShiftsPage from './ui/ShiftsPage'
+import SkateRentalPage from './ui/SkateRentalPage'
 import Profile from './ui/Profile'
 import Login from './ui/Login'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
           { path: 'scoreboard', element: <GameScoreboard /> },
           { path: 'lights', element: <LightsControl /> },
           { path: 'shifts', element: <ShiftsPage /> },
+          { path: 'skate-rental', element: <SkateRentalPage /> },
           { path: 'admin', element: <AdminPanel /> },
         ],
       },

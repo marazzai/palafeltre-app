@@ -11,6 +11,7 @@ from ...models.tasks import Task, TaskComment, TaskAttachment
 from ...models.tickets import Ticket, TicketComment, TicketStatusHistory, TicketAttachment, TicketCategory
 from ...models.documents import Folder, Document, DocumentVersion
 from ...models.scheduling import Shift, AvailabilityBlock, ShiftSwapRequest
+from ...models.skates import SkateInventory, SkateRental
 from fastapi import UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from typing import Dict, Set, List, Optional
@@ -563,7 +564,7 @@ def tasks_list(view: str = 'mine', db: Session = Depends(get_db), current: User 
     return result
 
 @router.post("/tasks", response_model=TaskOut, status_code=201)
-def tasks_create(data: TaskCreate, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+async def tasks_create(data: TaskCreate, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     task = Task(
         title=data.title, 
         description=data.description, 
@@ -581,6 +582,16 @@ def tasks_create(data: TaskCreate, db: Session = Depends(get_db), current: User 
     db.add(task)
     db.commit()
     db.refresh(task)
+    
+    # Send notifications to assigned users
+    for assignee in task.assignees:
+        await send_notification(
+            assignee.id, 
+            f"Nuovo incarico assegnato: {task.title}",
+            "info",
+            {"task_id": task.id, "priority": task.priority}
+        )
+    
     return TaskOut(
         id=task.id, title=task.title, description=task.description, priority=task.priority, due_date=task.due_date,
         completed=task.completed, assignees=[u.id for u in task.assignees], creator_id=task.creator_id, created_at=task.created_at,
@@ -2245,4 +2256,225 @@ async def recurring_tasks_scheduler():
         except Exception as e:
             logger.error(f"Error in recurring_tasks_scheduler: {e}", exc_info=True)
             await asyncio.sleep(60)
+
+
+# ---- Notifications System ----
+async def send_notification(user_id: int | None, message: str, notification_type: str = "info", data: dict | None = None):
+    """
+    Send notification to a specific user or broadcast to all
+    notification_type: info|success|warning|danger
+    """
+    payload = {
+        "type": "notification",
+        "notification_type": notification_type,
+        "message": message,
+        "data": data or {},
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if user_id:
+        # Send to specific user's room (notifications_user_{id})
+        await ws_manager.broadcast(f"notifications_user_{user_id}", payload)
+    else:
+        # Broadcast to all connected users (notifications_all)
+        await ws_manager.broadcast("notifications_all", payload)
+    
+    logger.info(f"Notification sent - user: {user_id or 'all'}, type: {notification_type}, message: {message}")
+
+
+@router.post("/notifications/test")
+async def test_notification(current: User = Depends(get_current_user)):
+    """Test endpoint to send a notification to current user"""
+    await send_notification(current.id, "Questa è una notifica di test!", "info")
+    return {"ok": True, "message": "Notification sent"}
+
+
+@router.post("/notifications/broadcast")
+async def broadcast_notification(message: str, notification_type: str = "info", _: User = Depends(require_admin)):
+    """Admin endpoint to broadcast notification to all users"""
+    await send_notification(None, message, notification_type)
+    return {"ok": True, "message": "Broadcast sent"}
+
+
+# ---- Skate Rental System ----
+class SkateInventoryOut(BaseModel):
+    id: int
+    size: str
+    type: str
+    qr_code: str | None
+    status: str
+    condition: str
+    notes: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SkateInventoryCreate(BaseModel):
+    size: str
+    type: str = 'standard'
+    qr_code: str | None = None
+    condition: str = 'good'
+    notes: str | None = None
+
+
+class SkateRentalOut(BaseModel):
+    id: int
+    skate_id: int
+    customer_name: str
+    customer_phone: str | None
+    user_id: int | None
+    deposit_amount: float
+    rental_price: float
+    rented_at: datetime
+    returned_at: datetime | None
+    notes: str | None
+    skate: SkateInventoryOut | None
+
+    class Config:
+        from_attributes = True
+
+
+class SkateRentalCreate(BaseModel):
+    skate_id: int
+    customer_name: str
+    customer_phone: str | None = None
+    deposit_amount: float = 0.0
+    rental_price: float = 0.0
+    notes: str | None = None
+
+
+@router.get("/skates/inventory", response_model=list[SkateInventoryOut])
+def skates_inventory_list(status: str | None = None, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """List all skates in inventory, optionally filtered by status"""
+    q = db.query(SkateInventory)
+    if status:
+        q = q.filter(SkateInventory.status == status)
+    return q.order_by(SkateInventory.size.asc()).all()
+
+
+@router.post("/skates/inventory", response_model=SkateInventoryOut, status_code=201)
+def skates_inventory_create(data: SkateInventoryCreate, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    """Add new skate to inventory"""
+    skate = SkateInventory(**data.model_dump())
+    db.add(skate)
+    db.commit()
+    db.refresh(skate)
+    logger.info(f"Added skate to inventory: size {skate.size}, type {skate.type}")
+    return skate
+
+
+@router.patch("/skates/inventory/{skate_id}")
+def skates_inventory_update(skate_id: int, status: str | None = None, condition: str | None = None, notes: str | None = None, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Update skate status/condition"""
+    skate = db.query(SkateInventory).get(skate_id)
+    if not skate:
+        raise HTTPException(status_code=404, detail="Pattino non trovato")
+    if status:
+        skate.status = status
+    if condition:
+        skate.condition = condition
+    if notes is not None:
+        skate.notes = notes
+    skate.updated_at = datetime.now(timezone.utc)
+    db.add(skate)
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/skates/inventory/{skate_id}")
+def skates_inventory_delete(skate_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Delete skate from inventory (admin only)"""
+    skate = db.query(SkateInventory).get(skate_id)
+    if not skate:
+        raise HTTPException(status_code=404, detail="Pattino non trovato")
+    db.delete(skate)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/skates/rentals", response_model=list[SkateRentalOut])
+def skates_rentals_list(active: bool | None = None, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """List all rentals, optionally filter by active status"""
+    q = db.query(SkateRental)
+    if active is not None:
+        if active:
+            q = q.filter(SkateRental.returned_at == None)
+        else:
+            q = q.filter(SkateRental.returned_at != None)
+    return q.order_by(SkateRental.rented_at.desc()).all()
+
+
+@router.post("/skates/rentals", response_model=SkateRentalOut, status_code=201)
+async def skates_rentals_create(data: SkateRentalCreate, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    """Create new rental (check-out)"""
+    skate = db.query(SkateInventory).get(data.skate_id)
+    if not skate:
+        raise HTTPException(status_code=404, detail="Pattino non trovato")
+    if skate.status != 'available':
+        raise HTTPException(status_code=400, detail="Pattino non disponibile")
+    
+    rental = SkateRental(
+        skate_id=data.skate_id,
+        customer_name=data.customer_name,
+        customer_phone=data.customer_phone,
+        user_id=current.id,
+        deposit_amount=data.deposit_amount,
+        rental_price=data.rental_price,
+        notes=data.notes
+    )
+    skate.status = 'rented'
+    db.add(rental)
+    db.add(skate)
+    db.commit()
+    db.refresh(rental)
+    
+    logger.info(f"Skate rented: {skate.size} to {rental.customer_name}")
+    
+    # Send notification to admins
+    await send_notification(None, f"Noleggio pattini taglia {skate.size} a {rental.customer_name}", "info", {"rental_id": rental.id})
+    
+    return rental
+
+
+@router.post("/skates/rentals/{rental_id}/return")
+async def skates_rentals_return(rental_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    """Return rental (check-in)"""
+    rental = db.query(SkateRental).get(rental_id)
+    if not rental:
+        raise HTTPException(status_code=404, detail="Noleggio non trovato")
+    if rental.returned_at:
+        raise HTTPException(status_code=400, detail="Pattino già restituito")
+    
+    rental.returned_at = datetime.now(timezone.utc)
+    rental.skate.status = 'available'
+    db.add(rental)
+    db.add(rental.skate)
+    db.commit()
+    
+    logger.info(f"Skate returned: rental_id {rental_id}")
+    
+    # Send notification
+    await send_notification(None, f"Restituzione pattini taglia {rental.skate.size} da {rental.customer_name}", "success", {"rental_id": rental_id})
+    
+    return {"ok": True, "returned_at": rental.returned_at}
+
+
+@router.get("/skates/stats")
+def skates_stats(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Get rental statistics"""
+    total = db.query(SkateInventory).count()
+    available = db.query(SkateInventory).filter(SkateInventory.status == 'available').count()
+    rented = db.query(SkateInventory).filter(SkateInventory.status == 'rented').count()
+    maintenance = db.query(SkateInventory).filter(SkateInventory.status == 'maintenance').count()
+    active_rentals = db.query(SkateRental).filter(SkateRental.returned_at == None).count()
+    
+    return {
+        "total_skates": total,
+        "available": available,
+        "rented": rented,
+        "maintenance": maintenance,
+        "active_rentals": active_rentals
+    }
 
