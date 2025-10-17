@@ -16,9 +16,25 @@ export function ToastProvider({ children }: { children: any }){
       {children}
       <div style={{position:'fixed', right:16, bottom:16, display:'flex', flexDirection:'column', gap:8, zIndex:9999}}>
         {items.map(i=> {
-          const bgColor = i.type === 'error' ? '#ef4444' : i.type === 'success' ? '#22c55e' : i.type === 'warning' ? '#f97316' : '#3b82f6'
+          const bgColor = i.type === 'error'
+            ? 'var(--color-danger)'
+            : i.type === 'success'
+            ? 'var(--color-success)'
+            : i.type === 'warning'
+            ? 'var(--color-warning)'
+            : 'var(--color-info)'
           return (
-            <div key={i.id} className="card" style={{padding:'12px 16px', background:bgColor, color:'#fff', boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
+            <div
+              key={i.id}
+              className="card"
+              style={{
+                padding:'12px 16px',
+                background:bgColor,
+                color:'#fff',
+                boxShadow:'0 12px 32px rgba(0, 0, 0, 0.4)',
+                borderColor:'transparent'
+              }}
+            >
               {i.text}
             </div>
           )
