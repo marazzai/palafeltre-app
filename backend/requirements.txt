@@ -19,7 +19,3 @@ reportlab==4.2.5; platform_system != "Windows"
 pytest==8.3.3
 httpx==0.27.2
 slowapi==0.1.9
-# Allow newer obs-websocket-py releases (v1.x may support OBS WebSocket v5)
-obs-websocket-py>=1.0.0
-# websocket-client may be used for direct JSON-RPC v5 calls if needed
-websocket-client>=1.6.0

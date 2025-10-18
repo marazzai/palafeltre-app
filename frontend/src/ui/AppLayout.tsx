@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { clearToken, getToken } from '../auth'
-import { menuItems as sharedMenu } from '../menu'
 import { useNotifications } from '../utils/useNotifications'
 import { NotificationCenter } from '../components/NotificationCenter'
 
@@ -22,12 +21,22 @@ type MenuItem = {
   requirePermission?: string
 }
 
-const menuItems: MenuItem[] = sharedMenu
+const menuItems: MenuItem[] = [
+  { path: '/', label: 'Dashboard', icon: 'home' },
+  { path: '/maintenance', label: 'Manutenzioni', icon: 'wrench' },
+  { path: '/tasks', label: 'Incarichi', icon: 'checklist' },
+  { path: '/documents', label: 'Documenti', icon: 'files' },
+  { path: '/shifts', label: 'Turni', icon: 'tasks' },
+  { path: '/game', label: 'Partita', icon: 'tasks' },
+  { path: '/lights', label: 'Controllo Luci', icon: 'tasks' },
+  { path: '/skating', label: 'Pattinaggio', icon: 'skate' },
+  { path: '/skate-rental', label: 'Noleggio Pattini', icon: 'skate' },
+  { path: '/admin', label: 'Admin', icon: 'settings', requireAdmin: true },
+]
 
 export function AppLayout(){
   const [open, setOpen] = useState(false)
   const [user, setUser] = useState<UserInfo | null>(null)
-  const [rolePages, setRolePages] = useState<string[] | null>(null)
   const navigate = useNavigate()
   
   // Notifications system
@@ -44,12 +53,7 @@ export function AppLayout(){
           const p = await fetch('/api/v1/me/permissions', { headers: { Authorization: `Bearer ${t}` } }).then(r=> r.ok ? r.json() : { permissions: [] })
           me.permissions = p.permissions || []
         }catch{}
-          setUser(me)
-          // fetch pages allowed for this user (merged from roles)
-          try{
-            const rp = await fetch('/api/v1/me/role-pages', { headers: { Authorization: `Bearer ${t}` } }).then(r=> r.ok ? r.json() : { pages: [] })
-            setRolePages(Array.isArray(rp.pages) ? rp.pages : [])
-          }catch{ setRolePages([]) }
+        setUser(me)
       })
       .catch(()=> setUser(null))
   },[])
@@ -73,10 +77,7 @@ export function AppLayout(){
     if (item.requirePermission) {
       return user.permissions?.includes(item.requirePermission) || user.roles.includes('admin')
     }
-    // If rolePages has been loaded, only allow items present in that list (admins bypass)
-    if(user.roles.includes('admin')) return true
-    if(rolePages === null) return true // still loading pages -> optimistic show
-    return rolePages.includes(item.path) || item.path === '/' // always allow dashboard
+    return true
   }
   
   const visibleItems = menuItems.filter(canAccess)

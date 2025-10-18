@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { getToken, setToken as storeToken } from '../auth'
 
 type Group = { id: number; name: string; level: number }
 type Scene = { id: number; name: string }
@@ -8,12 +7,12 @@ export function LightsControl(){
   const [groups, setGroups] = useState<Group[]>([])
   const [scenes, setScenes] = useState<Scene[]>([])
   const [activeScene, setActiveScene] = useState<number | null>(null)
-  const [token, setToken] = useState<string>(getToken())
+  const [token, setToken] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string>('')
   const [autoRefresh, setAutoRefresh] = useState(true)
 
-  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
+  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
   async function load(){
     try{
       const res = await fetch('/api/v1/dali/groups', { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
@@ -60,7 +59,7 @@ export function LightsControl(){
       <div className="card" style={{marginBottom:16}}>
         <div className="card-body" style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
           <input className="input" style={{flex:1, minWidth:200}} placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
           <label style={{display:'flex', alignItems:'center', gap:6, cursor:'pointer'}}>
             <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
             <span>Auto-refresh</span>

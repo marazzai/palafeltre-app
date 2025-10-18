@@ -127,34 +127,7 @@ export function GameScoreboard(){
   const unlockAudio = () => {
     setLastInteraction((prev) => `overlay-gesture @ ${new Date().toLocaleTimeString()}`)
     const a = audioRef.current
-    if (a) {
-      a.muted = false
-      try {
-        a.volume = 0.01
-        a.currentTime = 0
-        a.play()
-          .then(() => {
-            setTimeout(() => {
-              try {
-                a.pause(); a.currentTime = 0
-              } catch {}
-            }, 150)
-            setAudioUnlocked(true)
-          })
-          .catch((err) => {
-            // Even if play() fails (CORS/autoplay), consider the user's explicit gesture
-            // as intent to enable audio so hide the overlay and allow AudioContext-based sound.
-            console.warn('audio.play() promise rejected', err)
-            setAudioUnlocked(true)
-          })
-      } catch (e) {
-        console.warn('audio play exception', e)
-        setAudioUnlocked(true)
-      }
-    } else {
-      // No audio element available; still mark unlocked because user performed gesture
-      setAudioUnlocked(true)
-    }
+    if(a){ a.muted = false; try{ a.volume = 0.01; a.currentTime = 0; a.play().then(() => { setTimeout(() => { try { a.pause(); a.currentTime = 0 } catch{} }, 150); setAudioUnlocked(true) }).catch(()=>{ console.warn('audio.play() promise rejected') }) }catch(e){ console.warn('audio play exception', e) } }
     try { const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext; const ctx = new Ctx(); ctx.resume && ctx.resume(); setTimeout(() => { try { ctx.close() } catch{} }, 200) } catch{}
   }
 

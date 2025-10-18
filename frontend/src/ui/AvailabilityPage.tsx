@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { getToken, setToken as storeToken } from '../auth'
 
 type Block = { id:number; day_of_week:number; start_time:string; end_time:string }
 
@@ -7,11 +6,11 @@ function toHM(s: string){ return s.slice(0,5) }
 const days = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom']
 
 export function AvailabilityPage(){
-  const [token, setToken] = useState(getToken())
+  const [token, setToken] = useState('')
   const [blocks, setBlocks] = useState<Block[]>([])
   const [form, setForm] = useState<{ day:string; start:string; end:string }>({ day:'0', start:'09:00', end:'13:00' })
 
-  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
+  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function load(){
@@ -50,7 +49,7 @@ export function AvailabilityPage(){
         <h2 style={{margin:0}}>Disponibilità settimanale</h2>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
           <button className="btn" onClick={save}>Salva</button>
         </div>
       </div>
