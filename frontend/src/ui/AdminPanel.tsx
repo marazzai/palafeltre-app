@@ -58,10 +58,20 @@ function UsersSection(){
   // Create user modal
   const [showCreate, setShowCreate] = useState(false)
   const [nu, setNu] = useState({ username:'', email:'', full_name:'', password:'' })
+  const [generatedPwd, setGeneratedPwd] = useState<string | null>(null)
   const createUser = async ()=>{
-    if(!nu.username.trim() || !nu.email.trim() || !nu.password.trim()) return
-    await fetch('/api/v1/users', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(nu) })
-    setShowCreate(false); setNu({ username:'', email:'', full_name:'', password:'' }); reload()
+    // Use admin endpoint which returns generated password when omitted
+    if(!nu.email.trim()) return
+    setGeneratedPwd(null)
+    const payload: any = { email: nu.email.trim(), full_name: nu.full_name.trim() || undefined }
+    if(nu.username.trim()) payload.username = nu.username.trim()
+    if(nu.password.trim()) payload.password = nu.password.trim()
+    const res = await fetch('/api/v1/admin/users/create', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(payload) })
+    if(!res.ok){ const txt = await res.text().catch(()=>null); alert('Errore: '+ (txt||res.status)); return }
+    const d = await res.json()
+    setGeneratedPwd(d.password || null)
+    setNu({ username:'', email:'', full_name:'', password:'' })
+    reload()
   }
 
   // Roles modal
@@ -121,11 +131,17 @@ function UsersSection(){
               <label>Username<input className="input" value={nu.username} onChange={e=> setNu({...nu, username: e.target.value})} /></label>
               <label>Email<input className="input" value={nu.email} onChange={e=> setNu({...nu, email: e.target.value})} /></label>
               <label>Nome completo<input className="input" value={nu.full_name} onChange={e=> setNu({...nu, full_name: e.target.value})} /></label>
-              <label>Password<input className="input" type="password" value={nu.password} onChange={e=> setNu({...nu, password: e.target.value})} /></label>
+              <label>Password (opzionale, se vuota verrà generata)<input className="input" type="password" value={nu.password} onChange={e=> setNu({...nu, password: e.target.value})} /></label>
+              {generatedPwd && (
+                <div style={{background:'#f3f4f6', padding:8, borderRadius:6}}>
+                  <div style={{fontSize:13}}>Password generata: <strong style={{fontFamily:'monospace'}}>{generatedPwd}</strong></div>
+                  <div style={{marginTop:6}}><button className="btn" onClick={()=> navigator.clipboard?.writeText(generatedPwd || '')}>Copia</button></div>
+                </div>
+              )}
             </div>
             <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
               <button className="btn btn-outline" onClick={()=> setShowCreate(false)}>Annulla</button>
-              <button className="btn" onClick={createUser} disabled={!nu.username.trim() || !nu.email.trim() || !nu.password.trim()}>Crea</button>
+              <button className="btn" onClick={createUser} disabled={!nu.email.trim()}>Crea</button>
             </div>
           </div>
         </div>
