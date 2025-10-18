@@ -1265,28 +1265,36 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
         return {'scenes': scenes}
     except Exception as e:
         # Log full exception with traceback on the server for diagnostics
-        logger.exception("OBS scan/connection failed")
-        # If we see the specific KeyError for 'status', provide actionable hint about protocol mismatch
-        hint = None
+        logger.exception("OBS scan/connection failed (v4 client)")
+        # Detect likely v5 protocol mismatch and try v5 helper
+        is_protocol_mismatch = False
         try:
             if isinstance(e, KeyError) and (str(e) == "'status'" or (e.args and e.args[0] == 'status')):
-                hint = ("It looks like the OBS WebSocket server speaks the v5 protocol, while the server-side Python client "
-                        "expects the v4 protocol (obs-websocket 4.x). Either install OBS WebSocket 4.x on the OBS host or "
-                        "upgrade the backend to a client compatible with OBS WebSocket v5.")
-            elif "status" in str(e) and 'KeyError' in type(e).__name__:
-                hint = ("Connection appears to fail due to a missing 'status' field in the response — this usually means a "
-                        "protocol mismatch between OBS WebSocket and the Python client library.")
+                is_protocol_mismatch = True
+            elif 'status' in str(e) and 'KeyError' in type(e).__name__:
+                is_protocol_mismatch = True
         except Exception:
-            hint = None
+            is_protocol_mismatch = False
 
-        # Return a concise, non-sensitive message to the client including exception type and message
+        if is_protocol_mismatch:
+            # try v5 helper
+            try:
+                from ...services.obs_v5 import get_scene_list, ObsV5Error
+                try:
+                    scenes = get_scene_list(host, port, pwd)
+                    return {'scenes': scenes}
+                except ObsV5Error as ov5e:
+                    logger.exception('OBS v5 helper failed')
+                    raise HTTPException(status_code=500, detail=f'Connection failed: OBS v5 attempt error: {ov5e}')
+            except Exception as import_e:
+                logger.exception('Failed to import obs_v5 helper')
+                raise HTTPException(status_code=500, detail=f'Connection failed: {type(e).__name__}: {str(e)}. Additionally failed to use v5 fallback: {import_e}')
+
+        # Return the original error if not protocol mismatch / fallback not available
         try:
             detail = f"{type(e).__name__}: {str(e)}"
         except Exception:
             detail = "Connection failed"
-
-        if hint:
-            raise HTTPException(status_code=500, detail=f"Connection failed: {detail}. {hint}")
         raise HTTPException(status_code=500, detail=f'Connection failed: {detail}')
 
 
