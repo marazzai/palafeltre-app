@@ -54,6 +54,7 @@ export function GameScoreboard(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
   const prevTimeRef = useRef<number>(state.timerRemaining)
+  const [audioUnlocked, setAudioUnlocked] = useState<boolean>(false)
   const [viewport, setViewport] = useState<{ w?: number; h?: number; mt: number; mr: number; mb: number; ml: number }>(() => {
     const params = new URLSearchParams(window.location.search)
     const w = Number(params.get('w') || '')
@@ -111,6 +112,13 @@ export function GameScoreboard(){
     const audio = new Audio('/api/v1/scoreboard/siren')
     audio.preload = 'auto'
     audioRef.current = audio
+    // Try silent autoplay to unlock if policy allows
+    audio.muted = true
+    audio.play().then(() => {
+      audio.pause(); audio.currentTime = 0; audio.muted = false; setAudioUnlocked(true)
+    }).catch(() => {
+      setAudioUnlocked(false)
+    })
   }, [])
 
   const playSiren = () => {
@@ -183,10 +191,29 @@ export function GameScoreboard(){
         .pen-time { font-family: 'Orbitron', sans-serif; font-weight:700; font-size: clamp(16px, 2.4vw, 40px); }
         .badge { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 10px; background: #f97316; color: #000; border-radius: 999px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
         .ws { position: fixed; bottom: 10px; right: 12px; font-size: 12px; opacity: .6; font-family: 'Oswald', sans-serif; }
+        .unlock { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.6); }
+        .unlock-card { background: rgba(15, 53, 84, 0.95); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 18px 22px; text-align:center; max-width: 520px; margin: 16px; }
+        .unlock-title { font-family: 'Oswald', sans-serif; font-size: 22px; margin-bottom: 8px; }
+        .unlock-text { font-size: 14px; opacity: .9; margin-bottom: 14px; }
+        .unlock-btn { display:inline-block; padding: 10px 18px; border-radius: 8px; background: #f97316; color: #000; font-weight: 800; letter-spacing: .5px; cursor:pointer; border:none; }
         @media (max-width: 900px) { .sb-wrap { aspect-ratio: auto; } .sb-main { grid-template-columns: 1fr; } .sb-bottom { grid-template-columns: 1fr; } }
       `}</style>
 
       {!state.obsVisible && (<div className="badge">OBS nascosto</div>)}
+      {!audioUnlocked && (
+        <div className="unlock">
+          <div className="unlock-card">
+            <div className="unlock-title">Abilita audio</div>
+            <div className="unlock-text">Per le policy del browser è necessario un clic per attivare i suoni del tabellone (sirena a fine periodo e ad ogni minuto).</div>
+            <button className="unlock-btn" onClick={() => {
+              const a = audioRef.current
+              if(a){ a.muted = false; a.volume = 0.01; a.currentTime = 0; a.play().then(() => { setTimeout(() => { try { a.pause(); a.currentTime = 0 } catch{} }, 150); setAudioUnlocked(true) }).catch(() => {}) }
+              // Also unlock WebAudio by creating/resuming a context in gesture
+              try { const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext; const ctx = new Ctx(); ctx.resume && ctx.resume(); setTimeout(() => { try { ctx.close() } catch{} }, 200) } catch{}
+            }}>Abilita audio</button>
+          </div>
+        </div>
+      )}
       <div className="sb-wrap" style={{ width: viewport.w ? `${viewport.w}px` : undefined, height: viewport.h ? `${viewport.h}px` : undefined, aspectRatio: viewport.w && viewport.h ? 'auto' as any : undefined }}>
         <div className="sb-main">
           <div className="team" style={{borderColor: 'rgba(255,255,255,0.15)'}}>
