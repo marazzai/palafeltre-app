@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getToken } from '../auth'
+import { availablePages } from '../menu'
 
 type User = { id:number; username?:string; full_name?:string|null; email:string; roles:string[]; is_active:boolean }
 type Role = { id:number; name:string; permissions:string[] }
@@ -181,17 +182,31 @@ function UsersSection(){
 function RolesSection(){
   const [roles, setRoles] = useState<Role[]>([])
   const [perms, setPerms] = useState<{id:number; code:string; description?:string}[]>([])
+  // available pages in the app (path keys used for role->pages mapping)
+  // use shared list from menu.ts so AdminPanel and AppLayout stay in sync
+  const [rolePages, setRolePages] = useState<string[]>([])
   const [roleId, setRoleId] = useState<number|undefined>(undefined)
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [showCreate, setShowCreate] = useState(false)
   const [newRole, setNewRole] = useState('')
   const [renameTo, setRenameTo] = useState('')
+  const [savingPerms, setSavingPerms] = useState(false)
+  const [savingPages, setSavingPages] = useState(false)
+  const [pagesStatus, setPagesStatus] = useState<string|null>(null)
   useEffect(()=>{
     fetch(`/api/v1/roles`, { headers: { Authorization: `Bearer ${token()}` } })
       .then(r=>r.json()).then(setRoles).catch(()=>{})
     fetch(`/api/v1/permissions`, { headers: { Authorization: `Bearer ${token()}` } })
       .then(r=>r.json()).then(setPerms).catch(()=>{})
   },[])
+  useEffect(()=>{
+    if(!roleId) return
+    // load role pages
+    fetch(`/api/v1/admin/roles/${roleId}/pages`, { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r=> r.ok ? r.json() : { pages: [] })
+      .then(d=> setRolePages(Array.isArray(d.pages)? d.pages : []))
+      .catch(()=> setRolePages([]))
+  },[roleId])
   useEffect(()=>{
     const cur = roles.find(r=> r.id===roleId)
     if(cur){
@@ -214,11 +229,29 @@ function RolesSection(){
   const toggle = (code:string)=> setChecked(prev=> ({...prev, [code]: !prev[code]}))
   const save = async ()=>{
     if(!roleId) return
-    const list = Object.keys(checked).filter(c=> checked[c])
-    await fetch(`/api/v1/roles/${roleId}/permissions`, { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ permissions: list }) })
-    // refresh roles to reflect changes
-    const rs = await fetch(`/api/v1/roles`, { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json())
-    setRoles(rs)
+    setSavingPerms(true)
+    try{
+      const list = Object.keys(checked).filter(c=> checked[c])
+      await fetch(`/api/v1/roles/${roleId}/permissions`, { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ permissions: list }) })
+      // refresh roles to reflect changes
+      const rs = await fetch(`/api/v1/roles`, { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json())
+      setRoles(rs)
+    }catch(e){ /* ignore */ }
+    setSavingPerms(false)
+  }
+  const savePages = async ()=>{
+    if(!roleId) return
+    setSavingPages(true)
+    try{
+      const r = await fetch(`/api/v1/admin/roles/${roleId}/pages`, { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ pages: rolePages }) })
+      if(r.ok){
+        setPagesStatus('Pagine ruolo salvate')
+        setTimeout(()=> setPagesStatus(null), 2500)
+      } else {
+        setPagesStatus('Errore salvataggio pagine')
+      }
+    }catch(e){ setPagesStatus('Errore salvataggio pagine') }
+    setSavingPages(false)
   }
   const reloadRoles = async ()=> setRoles(await fetch(`/api/v1/roles`, { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json()))
   const createRole = async ()=>{
@@ -270,6 +303,26 @@ function RolesSection(){
               </div>
             </div></div>
           ))}
+          <div className="card"><div className="card-body">
+            <div style={{fontWeight:600, marginBottom:8}}>Pagine accessibili</div>
+            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+              {availablePages.map(p=> (
+                <label key={p.key} style={{display:'flex', gap:8, alignItems:'center'}}>
+                  <input type="checkbox" checked={rolePages.includes(p.key)} onChange={()=> {
+                    setRolePages(prev => prev.includes(p.key) ? prev.filter(x=>x!==p.key) : [...prev, p.key])
+                  }} />
+                  <span>{p.label} <small style={{color:'#666', marginLeft:8}}>{p.key}</small></span>
+                </label>
+              ))}
+            </div>
+            <div style={{marginTop:8, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div style={{minHeight:20}}>{pagesStatus && <span className="text-muted">{pagesStatus}</span>}</div>
+              <div style={{display:'flex', gap:8}}>
+                <button className="btn btn-outline" onClick={()=> setRolePages([])}>Annulla</button>
+                <button className="btn" onClick={savePages} disabled={savingPages}>{savingPages? 'Salvataggio…' : 'Salva pagine ruolo'}</button>
+              </div>
+            </div>
+          </div></div>
         </div>
       )}
       {showCreate && (
@@ -291,6 +344,7 @@ function RolesSection(){
 }
 
 function ModulesSection(){
+  const navigate = useNavigate()
   // Settings
   const [settings, setSettings] = useState<Record<string,string>>({})
   const [loading, setLoading] = useState(true)

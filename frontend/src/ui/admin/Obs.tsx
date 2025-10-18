@@ -36,11 +36,12 @@ export default function AdminObs(){
       if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Scan failed: '+(txt||r.status)); return }
       const d = await r.json()
       setScenes(d.scenes || [])
-      alert(`Trovate ${ (d.scenes||[]).length } scene`)
+      setStatus(`Trovate ${(d.scenes||[]).length} scene`)
     }catch(e){ alert('Scan error') }
   }
 
   const saveConfig = async ()=>{
+    setSaving(true)
     const cfg = { host: host||'', port: Number(port)||4455, password: password || '' }
     const r = await fetch('/api/v1/admin/obs/config', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(cfg) })
     if(!r.ok){ alert('Salvataggio config fallito'); return }
@@ -51,7 +52,22 @@ export default function AdminObs(){
     ]
     const s = await fetch('/api/v1/admin/settings', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(items) })
     if(!s.ok){ alert('Salvataggio scene fallito'); return }
-    alert('Configurazione OBS salvata')
+    setStatus('Configurazione OBS salvata')
+    setSaving(false)
+  }
+
+  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  const triggerScene = async (action: 'activate' | 'deactivate', sceneName?: string)=>{
+    setStatus('Invio test...')
+    try{
+      const body = { action, scene: sceneName || (action==='activate'? activateScene: deactivateScene) }
+      const r = await fetch('/api/v1/admin/obs/trigger', { method: 'POST', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+      if(!r.ok){ const txt = await r.text().catch(()=>null); setStatus('Errore test: '+(txt||r.status)); return }
+      setStatus('Test inviato')
+    }catch(e){ setStatus('Errore invio test') }
+    setTimeout(()=> setStatus(null), 3000)
   }
 
   if(loading) return <div className="container"><p className="text-muted">Caricamento OBS…</p></div>
@@ -76,8 +92,13 @@ export default function AdminObs(){
           </select>
         </div>
       </div></div>
-      <div style={{marginTop:12, display:'flex', justifyContent:'flex-end'}}>
-        <button className="btn" onClick={saveConfig}>Salva</button>
+      <div style={{marginTop:12, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <div style={{minHeight:20}}>{status && <span className="text-muted">{status}</span>}</div>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn btn-outline" onClick={()=> triggerScene('activate')} disabled={!activateScene}>Test ATTIVA</button>
+          <button className="btn btn-outline" onClick={()=> triggerScene('deactivate')} disabled={!deactivateScene}>Test DISATTIVA</button>
+          <button className="btn" onClick={saveConfig} disabled={saving}>{saving? 'Salvataggio…' : 'Salva'}</button>
+        </div>
       </div>
     </div>
   )
