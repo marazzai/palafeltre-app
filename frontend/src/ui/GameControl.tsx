@@ -212,10 +212,9 @@ export function GameControl(){
             <input type="checkbox" checked={setup.sirenEveryMinute} onChange={(e)=> setSetup({ ...setup, sirenEveryMinute: e.target.checked })} />
             Sirena ogni minuto
           </label>
-          <div style={{display:'flex', gap:8, alignItems:'center'}}>
-            <button className="btn" onClick={startGame}>Applica configurazione</button>
-            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} onClick={toggleObs}>{state.obsVisible ? 'Disattiva scena' : 'Attiva scena'}</button>
-            <a className="btn btn-outline" href="/scoreboard" target="_blank" rel="noreferrer">Apri Scoreboard</a>
+          <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+            <button className="btn" style={{minWidth:180}} onClick={startGame}>Applica configurazione</button>
+            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:180}} onClick={toggleObs}>{state.obsVisible ? 'Disattiva scena' : 'Attiva scena'}</button>
           </div>
         </div>
       </div>
@@ -239,23 +238,7 @@ export function GameControl(){
         </div>
       </div>
 
-      <div className="card" style={{marginTop:16}}>
-        <div className="card-header"><strong>Tiri in porta</strong></div>
-        <div className="card-body" style={{display:'flex', gap:24}}>
-          <div style={{display:'flex', alignItems:'center', gap:8}}>
-            <span style={{width:120, fontWeight:600}}>{state.homeName}</span>
-            <button className="btn btn-outline" onClick={() => changeShots('home', -1)} disabled={state.shotsHome === 0}>-</button>
-            <span style={{fontSize:28, fontWeight:700, width:60, textAlign:'center'}}>{state.shotsHome}</span>
-            <button className="btn" onClick={() => changeShots('home', 1)}>+</button>
-          </div>
-          <div style={{display:'flex', alignItems:'center', gap:8}}>
-            <span style={{width:120, fontWeight:600}}>{state.awayName}</span>
-            <button className="btn btn-outline" onClick={() => changeShots('away', -1)} disabled={state.shotsAway === 0}>-</button>
-            <span style={{fontSize:28, fontWeight:700, width:60, textAlign:'center'}}>{state.shotsAway}</span>
-            <button className="btn" onClick={() => changeShots('away', 1)}>+</button>
-          </div>
-        </div>
-      </div>
+      {/* Rimosso: tiri in porta */}
 
       <div className="card" style={{marginTop:16}}>
         <div className="card-header"><strong>Cronometro</strong></div>
@@ -272,17 +255,17 @@ export function GameControl(){
       <div className="grid" style={{marginTop:16}}>
         <div className="card">
           <div className="card-header"><strong>Timeout</strong></div>
-          <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
-            <div style={{fontSize:28, fontWeight:700, width:100}}>{state.timeoutRemaining > 0 ? `${state.timeoutRemaining}s` : '—'}</div>
-            <button className="btn" onClick={startTimeout} disabled={state.timeoutRemaining > 0}>Avvia 30s</button>
-            <button className="btn btn-outline" onClick={stopTimeout} disabled={state.timeoutRemaining === 0}>Termina</button>
+          <div className="card-body" style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+            <div style={{fontSize:28, fontWeight:700, minWidth:120, textAlign:'center'}}>{state.timeoutRemaining > 0 ? `${state.timeoutRemaining}s` : '—'}</div>
+            <button className="btn" style={{minWidth:160}} onClick={startTimeout} disabled={state.timeoutRemaining > 0}>Avvia 30s</button>
+            <button className="btn btn-outline" style={{minWidth:160}} onClick={stopTimeout} disabled={state.timeoutRemaining === 0}>Termina</button>
           </div>
         </div>
         <div className="card">
           <div className="card-header"><strong>Controlli Rapidi</strong></div>
           <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-            <button className={`btn ${state.sirenOn ? '' : 'btn-outline'}`} onClick={toggleSiren}>{state.sirenOn ? 'Sirena ON' : 'Sirena OFF'}</button>
-            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} onClick={toggleObs}>{state.obsVisible ? 'OBS visibile' : 'OBS nascosto'}</button>
+            <button className={`btn ${state.sirenOn ? '' : 'btn-outline'}`} style={{minWidth:160}} onClick={toggleSiren}>{state.sirenOn ? 'Sirena ON' : 'Sirena OFF'}</button>
+            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:160}} onClick={toggleObs}>{state.obsVisible ? 'OBS visibile' : 'OBS nascosto'}</button>
           </div>
         </div>
       </div>
@@ -340,9 +323,9 @@ export function GameControl(){
                 <option value={5}>5 minuti</option>
               </select>
             </div>
-            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
-              <button className="btn btn-outline" onClick={() => setPenModal({ ...penModal, open:false })}>Annulla</button>
-              <button className="btn" onClick={addPenalty}>Aggiungi</button>
+            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8, flexWrap:'wrap'}}>
+              <button className="btn btn-outline" style={{minWidth:140}} onClick={() => setPenModal({ ...penModal, open:false })}>Annulla</button>
+              <button className="btn" style={{minWidth:140}} onClick={addPenalty}>Aggiungi</button>
             </div>
           </div>
         </div>

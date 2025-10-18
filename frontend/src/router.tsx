@@ -28,19 +28,17 @@ const Placeholder = ({ title }: { title: string }) => (
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
-  // Public routes (non-authenticated)
-  { path: '/monitors/locker-room', element: <LockerRoomMonitor /> },
+  { path: '/scoreboard', element: <GameScoreboard /> },
   {
     path: '/',
-    element: <AppLayout />,
+    element: <ProtectedRoute />,
     children: [
-      // Protected area
       {
-        element: <ProtectedRoute />,
+        element: <AppLayout />,
         children: [
           { index: true, element: <Dashboard /> },
           { path: 'profile', element: <Profile /> },
-          // Merge admin-related placeholders under AdminPanel later
+          // All app pages are protected
           { path: 'maintenance', element: <MaintenanceKanban /> },
           { path: 'tasks', element: <TasksPage /> },
           { path: 'checklists', element: <Placeholder title="Checklist" /> },
@@ -49,7 +47,6 @@ export const router = createBrowserRouter([
           { path: 'skating/player', element: <SkatingPlayer /> },
           { path: 'skating/display', element: <SkatingDisplay /> },
           { path: 'game', element: <GameControl /> },
-          { path: 'scoreboard', element: <GameScoreboard /> },
           { path: 'lights', element: <LightsControl /> },
           { path: 'shifts', element: <ShiftsPage /> },
           { path: 'skate-rental', element: <SkateRentalPage /> },

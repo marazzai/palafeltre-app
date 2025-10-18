@@ -1953,19 +1953,20 @@ async def game_scheduler():
                 # siren pulse each minute if option enabled
                 if game_state.siren_every_minute and game_state.timer_remaining % 60 == 0:
                     just_pulsed = True
-            # timeout countdown
+            # timeout countdown (always runs once started)
             if game_state.timeout_remaining > 0:
                 game_state.timeout_remaining -= 1
                 if game_state.timeout_remaining < 0:
                     game_state.timeout_remaining = 0
                 changed = True
-            # penalties
-            for p in list(game_state.penalties):
-                if p.remaining > 0:
-                    p.remaining -= 1
-                    if p.remaining <= 0:
-                        removed_ids.append(p.id)
-                        changed = True
+            # penalties: decrement ONLY when main timer is running
+            if game_state.timer_running:
+                for p in list(game_state.penalties):
+                    if p.remaining > 0:
+                        p.remaining -= 1
+                        if p.remaining <= 0:
+                            removed_ids.append(p.id)
+                            changed = True
             if removed_ids:
                 game_state.penalties = [p for p in game_state.penalties if p.id not in removed_ids]
         if changed:
