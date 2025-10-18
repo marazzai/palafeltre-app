@@ -368,14 +368,25 @@ function ModulesSection(){
 
       // OBS scan
       const [obsScenes, setObsScenes] = useState<string[]>([])
-      const scanObs = async ()=>{
-        try{
-          const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
-          if(!r.ok){ const txt = await r.text(); alert('Scan failed: ' + txt); return }
-          const d = await r.json()
-          setObsScenes(d.scenes || [])
-        }catch(e){ alert('Scan error') }
-      }
+          const [obsInfo, setObsInfo] = useState<{has_library:boolean; host:string; port:number; scene:string}|null>(null)
+          const scanObs = async ()=>{
+            try{
+              if(obsInfo && !obsInfo.has_library){ alert('OBS client library not installed on server'); return }
+              const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
+              if(!r.ok){ const txt = await r.text(); alert('Scan failed: ' + txt); return }
+              const d = await r.json()
+              setObsScenes(d.scenes || [])
+            }catch(e){ alert('Scan error') }
+          }
+          const loadObsInfo = async ()=>{
+            try{
+              const r = await fetch('/api/v1/admin/obs/info', { headers: { Authorization: `Bearer ${token()}` } })
+              if(!r.ok) return
+              const d = await r.json()
+              setObsInfo(d)
+            }catch(e){}
+          }
+          useEffect(()=>{ loadObsInfo() },[])
 
   // Ticket categories
   type Cat = { id:number; name:string; color?:string; sort_order:number }

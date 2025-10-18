@@ -1266,6 +1266,20 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
 
+
+@router.get('/admin/obs/info')
+def admin_obs_info(db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    """Return OBS configuration from settings and whether obs-websocket client library is available on the server."""
+    has_lib = True
+    try:
+        import obswebsocket  # type: ignore
+    except Exception:
+        has_lib = False
+    host = _get_setting_value(db, 'obs.host', '') or ''
+    port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
+    scene = _get_setting_value(db, 'obs.scene', '') or ''
+    return {'has_library': has_lib, 'host': host, 'port': port, 'scene': scene}
+
 class AuditOut(BaseModel):
     id: int
     timestamp: datetime
