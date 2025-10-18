@@ -1398,6 +1398,7 @@ class GameState(BaseModel):
     obs_visible: bool = True
     timer_running: bool = False
     timer_remaining: int = 20*60
+    in_interval: bool = False
     penalties: List[Penalty] = []
 
     def period_label(self) -> str:
@@ -1421,6 +1422,7 @@ def _snapshot_state() -> dict:
         "periodIndex": game_state.period_index,
         "timerRunning": game_state.timer_running,
         "timerRemaining": game_state.timer_remaining,
+    "inInterval": game_state.in_interval,
         "periodDuration": game_state.period_duration_seconds,
         "intervalDuration": game_state.interval_duration_seconds,
         "timeoutRemaining": game_state.timeout_remaining,
@@ -1466,6 +1468,7 @@ async def game_setup(data: GameSetupRequest, _: User = Depends(require_permissio
         game_state.score_home = 0
         game_state.score_away = 0
         game_state.timer_running = False
+        game_state.in_interval = False
         game_state.timer_remaining = secs
         game_state.penalties = []
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
@@ -1942,6 +1945,7 @@ async def game_obs_set(data: ObsToggle, _: User = Depends(require_permission('ga
 async def game_timer_reset(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
         game_state.timer_running = False
+        game_state.in_interval = False
         game_state.timer_remaining = game_state.period_duration_seconds
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
@@ -1962,8 +1966,11 @@ async def game_timer_set(req: TimerSetRequest, _: User = Depends(require_permiss
 @router.post("/game/interval/start")
 async def game_interval_start(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
+        game_state.in_interval = True
         game_state.timer_running = True
-        game_state.timer_remaining = game_state.interval_duration_seconds
+        # preload to interval duration if not already set at end-of-period
+        if game_state.timer_remaining <= 0 or game_state.timer_remaining > game_state.interval_duration_seconds:
+            game_state.timer_remaining = game_state.interval_duration_seconds
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
 
@@ -1972,6 +1979,7 @@ async def game_period_next(_: User = Depends(require_permission('game.control'))
     async with game_lock:
         game_state.period_index = min(4, game_state.period_index + 1)
         game_state.timer_running = False
+        game_state.in_interval = False
         game_state.timer_remaining = game_state.period_duration_seconds
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
@@ -2014,13 +2022,18 @@ async def game_scheduler():
                 if game_state.timer_remaining <= 0:
                     game_state.timer_remaining = 0
                     game_state.timer_running = False
-                    # end of period: auto set interval timer
-                    game_state.timer_remaining = game_state.interval_duration_seconds
-                    # trigger siren at end of period
-                    period_end_pulse = True
+                    if not game_state.in_interval:
+                        # end of period → switch to interval (stopped, ready to start)
+                        game_state.in_interval = True
+                        game_state.timer_remaining = game_state.interval_duration_seconds
+                        # trigger siren at end of period
+                        period_end_pulse = True
+                    else:
+                        # end of interval: keep at 0, controller will advance period
+                        game_state.in_interval = True
                 changed = True
                 # siren pulse each minute if option enabled
-                if game_state.siren_every_minute and game_state.timer_remaining % 60 == 0:
+                if game_state.siren_every_minute and (not game_state.in_interval) and game_state.timer_remaining % 60 == 0:
                     just_pulsed = True
             # timeout countdown (always runs once started)
             if game_state.timeout_remaining > 0:
@@ -2028,8 +2041,8 @@ async def game_scheduler():
                 if game_state.timeout_remaining < 0:
                     game_state.timeout_remaining = 0
                 changed = True
-            # penalties: decrement ONLY when main timer is running
-            if game_state.timer_running:
+            # penalties: decrement ONLY when main timer is running (not during interval)
+            if game_state.timer_running and (not game_state.in_interval):
                 for p in list(game_state.penalties):
                     if p.remaining > 0:
                         p.remaining -= 1
