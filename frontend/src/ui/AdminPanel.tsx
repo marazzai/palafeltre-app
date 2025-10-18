@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getToken } from '../auth'
 
 type User = { id:number; username?:string; full_name?:string|null; email:string; roles:string[]; is_active:boolean }
 type Role = { id:number; name:string; permissions:string[] }
@@ -41,7 +42,7 @@ export default function AdminPanel(){
 }
 
 function token(){
-  return localStorage.getItem('token')||''
+  return getToken()
 }
 
 function UsersSection(){
