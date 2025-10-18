@@ -436,17 +436,29 @@ function ModulesSection(){
       const [obsStatus, setObsStatus] = useState<string|null>(null)
 
       const scanObs = async ()=>{
-        setObsConnecting(true); setObsStatus('Connessione in corso...')
+        setObsConnecting(true); setObsStatus('Scansione in corso...')
         try{
           if(obsInfo && !obsInfo.has_library){ setObsStatus('Libreria OBS non installata sul server'); setObsConnecting(false); return }
           const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
-          if(!r.ok){ const txt = await r.text(); setObsStatus('Scan failed: '+(txt||r.status)); setObsConnected(false); return }
+          if(!r.ok){ const txt = await r.text().catch(()=>null); setObsStatus('Scan failed: '+(txt||r.status)); setObsConnected(false); return }
           const d = await r.json()
           setObsScenes(d.scenes || [])
           setObsStatus(`Trovate ${(d.scenes||[]).length} scene`)
           setObsConnected(true)
-        }catch(e){ setObsStatus('Scan error'); setObsConnected(false) }
+        }catch(e){ setObsStatus('Scan error: '+ String(e)); setObsConnected(false) }
         finally{ setObsConnecting(false); setTimeout(()=> setObsStatus(null), 3000) }
+      }
+
+      const saveObsConfig = async ()=>{
+        // save host/port/password via dedicated endpoint
+        try{
+          const cfg = { host: settings['obs.host']||'', port: Number(settings['obs.port']||4455)||4455, password: settings['obs.password']||'' }
+          const r = await fetch('/api/v1/admin/obs/config', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(cfg) })
+          if(!r.ok){ const txt = await r.text().catch(()=>null); setObsStatus('Connessione fallita: '+(txt||r.status)); return false }
+          setObsStatus('Configurazione OBS salvata sul server')
+          setTimeout(()=> setObsStatus(null), 2000)
+          return true
+        }catch(e){ setObsStatus('Errore salvataggio config: '+String(e)); return false }
       }
 
       const loadObsInfo = async ()=>{
@@ -499,8 +511,9 @@ function ModulesSection(){
         <label>OBS Password<input type="password" value={settings['obs.password']||''} onChange={e=> set('obs.password', e.target.value)} /></label>
         <label>Scena OBS<input value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)} /></label>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-          <button className="btn btn-outline" onClick={async ()=>{ await loadObsInfo(); await scanObs() }} disabled={obsConnecting}>{obsConnecting? 'Connettendo…':'Connetti e Scansiona'}</button>
+          <button className="btn btn-outline" onClick={async ()=>{ await loadObsInfo(); const ok = await saveObsConfig(); if(ok) await scanObs() }} disabled={obsConnecting}>{obsConnecting? 'Connettendo…':'Connetti'}</button>
           <button className="btn btn-outline" onClick={() => navigate('/admin/obs')}>Apri pagina OBS</button>
+          <button className="btn btn-outline" onClick={scanObs} disabled={obsConnecting}>Scansiona</button>
           <select value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)}>
             <option value="">-- seleziona scena --</option>
             {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
@@ -517,15 +530,32 @@ function ModulesSection(){
           </label>
           <div style={{display:'flex', gap:8, alignItems:'center'}}>
             <button className="btn" onClick={async ()=>{
-              // save settings including activate/deactivate scenes
+              // save settings including activate/deactivate scenes and config
               const keys = ['obs.host','obs.port','obs.password','obs.scene','obs.activate_scene','obs.deactivate_scene']
               const items = keys.filter(k=> settings[k]!==undefined).map(k=> ({ key:k, value: String(settings[k] ?? '') }))
               const r = await fetch('/api/v1/admin/settings', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(items) })
-              if(r.ok) setObsStatus('Impostazioni OBS salvate')
+              if(r.ok){ setObsStatus('Impostazioni OBS salvate'); await saveObsConfig() }
               else setObsStatus('Errore salvataggio OBS')
               setTimeout(()=> setObsStatus(null), 2000)
             }}>Salva Mappe Scene</button>
             <button className="btn btn-outline" onClick={()=> scanObs()} disabled={obsConnecting}>Scansiona Scene</button>
+            <button className="btn btn-outline" onClick={async ()=>{
+              // quick test activate
+              const scene = settings['obs.activate_scene'] || ''
+              if(!scene){ setObsStatus('Nessuna scena ATTIVA selezionata'); setTimeout(()=> setObsStatus(null),2000); return }
+              const r = await fetch('/api/v1/admin/obs/trigger', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ action: 'activate', scene }) })
+              if(r.ok) setObsStatus('Trigger ATTIVA inviato')
+              else { const t = await r.text().catch(()=>null); setObsStatus('Errore trigger: '+(t||r.status)) }
+              setTimeout(()=> setObsStatus(null),2000)
+            }}>Test ATTIVA</button>
+            <button className="btn btn-outline" onClick={async ()=>{
+              const scene = settings['obs.deactivate_scene'] || ''
+              if(!scene){ setObsStatus('Nessuna scena DISATTIVA selezionata'); setTimeout(()=> setObsStatus(null),2000); return }
+              const r = await fetch('/api/v1/admin/obs/trigger', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ action: 'deactivate', scene }) })
+              if(r.ok) setObsStatus('Trigger DISATTIVA inviato')
+              else { const t = await r.text().catch(()=>null); setObsStatus('Errore trigger: '+(t||r.status)) }
+              setTimeout(()=> setObsStatus(null),2000)
+            }}>Test DISATTIVA</button>
           </div>
         </div>
         {obsStatus && <div style={{marginTop:8}}><small className="text-muted">{obsStatus}</small></div>}
