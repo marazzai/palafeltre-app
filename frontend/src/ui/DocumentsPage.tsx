@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 type Folder = { id:number; name:string; parent_id:number|null }
 type Doc = { id:number; name:string; folder_id:number|null; created_at:string; updated_at:string; latest_version:number|null }
@@ -6,7 +7,7 @@ type Doc = { id:number; name:string; folder_id:number|null; created_at:string; u
 type TreeNode = Folder & { children: TreeNode[] }
 
 export function DocumentsPage(){
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(getToken())
   const [tree, setTree] = useState<TreeNode[]>([])
   const [current, setCurrent] = useState<number|null>(null)
   const [folders, setFolders] = useState<Folder[]>([])
@@ -18,7 +19,7 @@ export function DocumentsPage(){
   const [searchQ, setSearchQ] = useState('')
   const [searchRes, setSearchRes] = useState<any[]|null>(null)
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function loadTree(){
@@ -127,7 +128,7 @@ export function DocumentsPage(){
           <strong>Cartelle</strong>
           <div style={{display:'flex', gap:8, alignItems:'center'}}>
             <input className="input" placeholder="Bearer token" value={token} onChange={e => setToken(e.target.value)} style={{width:140}} />
-            <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva</button>
+            <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva</button>
           </div>
         </div>
         <div className="card-body">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 type SkateInventory = {
   id: number
@@ -34,7 +35,7 @@ type Stats = {
 }
 
 export default function SkateRentalPage() {
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(getToken())
   const [tab, setTab] = useState<'inventory' | 'rentals' | 'stats'>('inventory')
   const [inventory, setInventory] = useState<SkateInventory[]>([])
   const [rentals, setRentals] = useState<SkateRental[]>([])
@@ -44,10 +45,7 @@ export default function SkateRentalPage() {
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [activeOnly, setActiveOnly] = useState(true)
 
-  useEffect(() => {
-    const t = localStorage.getItem('token')
-    if (t) setToken(t)
-  }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
@@ -164,7 +162,7 @@ export default function SkateRentalPage() {
             onChange={(e) => setToken(e.target.value)}
             style={{ width: 140 }}
           />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>
+          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>
             Salva
           </button>
         </div>

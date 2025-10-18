@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 type Task = { 
   id:number; title:string; description?:string; priority:'low'|'medium'|'high'; 
@@ -10,7 +11,7 @@ type Comment = { id:number; task_id:number; author_id:number; content:string; cr
 type Attachment = { id:number; file_name:string; uploaded_at:string }
 
 export function TasksPage(){
-  const [token, setToken] = useState<string>('')
+  const [token, setToken] = useState<string>(getToken())
   const [view, setView] = useState<'mine'|'all'|'overdue'|'completed'>('mine')
   const [tasks, setTasks] = useState<Task[]>([])
   const [selected, setSelected] = useState<Task | null>(null)
@@ -27,7 +28,7 @@ export function TasksPage(){
     is_recurring:false, recurrence_pattern:'daily', recurrence_interval:1, recurrence_end_date:''
   })
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
@@ -119,7 +120,7 @@ export function TasksPage(){
         <h2 style={{margin:0}}>Incarichi</h2>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
           <button className="btn" onClick={() => setShowNew(true)}>Nuovo Incarico</button>
         </div>
       </div>

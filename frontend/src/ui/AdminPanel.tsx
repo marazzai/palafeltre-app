@@ -8,15 +8,22 @@ type Role = { id:number; name:string; permissions:string[] }
 export default function AdminPanel(){
   const navigate = useNavigate()
   const [tab, setTab] = useState<'users'|'roles'|'modules'|'branding'|'security'>('users')
-  // client-side guard: redirect non-admin
+  // client-side guard: check /me then decide. show nothing while checking to avoid a flash
+  const [checking, setChecking] = useState(true)
   useEffect(()=>{
-    const t = localStorage.getItem('token')||''
-    if(!t){ navigate('/') ; return }
+    const t = token()
+    if(!t){ navigate('/'); return }
     fetch('/api/v1/me', { headers: { Authorization: `Bearer ${t}` } })
-      .then(r=> r.ok ? r.json() : Promise.reject())
+      .then(r=> {
+         if(!r.ok) throw new Error('unauth')
+         return r.json()
+      })
       .then(me => { if(!Array.isArray(me.roles) || !me.roles.includes('admin')) navigate('/') })
       .catch(()=> navigate('/'))
+      .finally(()=> setChecking(false))
   },[])
+  if(checking) return <div className="text-muted">Verifica permessi…</div>
+
   return (
     <div>
       <h1>Amministrazione</h1>

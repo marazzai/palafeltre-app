@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 type Ticket = { id:number; title:string; description?:string|null; category:string; priority:'low'|'medium'|'high'; status:'open'|'in_progress'|'resolved'; creator_id:number; assignee_id?:number|null; created_at:string; updated_at:string }
 type Category = { id:number; name:string; color?:string|null; sort_order:number }
@@ -14,7 +15,7 @@ function priorityColor(p: Ticket['priority']){
 }
 
 export function MaintenanceKanban(){
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(getToken())
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [dragging, setDragging] = useState<Ticket | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -27,7 +28,7 @@ export function MaintenanceKanban(){
   const [filterCat, setFilterCat] = useState<string>('')
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
 
   async function load(){
     try{
@@ -95,7 +96,7 @@ export function MaintenanceKanban(){
         <h2 style={{margin:0}}>Segnalazioni e Manutenzioni</h2>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <input className="input" placeholder="Bearer token" value={token} onChange={e => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
           <select className="input" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
             <option value="">Tutte le categorie</option>
             {cats.map(c => (

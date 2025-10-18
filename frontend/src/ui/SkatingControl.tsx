@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 function useWs(room: string){
   const [status, setStatus] = useState<'connecting'|'open'|'closed'>('connecting')
@@ -29,10 +30,10 @@ export function SkatingControl(){
   const [events, setEvents] = useState<Array<{id:number; title:string; start_time:string; end_time:string}>>([])
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
-  const [token, setToken] = useState<string>('')
+  const [token, setToken] = useState<string>(getToken())
 
   useEffect(() => {
-    const t = localStorage.getItem('token')
+    const t = getToken()
     if(t) setToken(t)
   }, [])
 
@@ -91,7 +92,7 @@ export function SkatingControl(){
       <div className="card" style={{marginBottom:16}}>
         <div className="card-body" style={{display:'flex', gap:8, alignItems:'center'}}>
           <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
           <span className="text-muted" style={{fontSize:12}}>Richiesto per azioni protette (admin)</span>
         </div>
       </div>

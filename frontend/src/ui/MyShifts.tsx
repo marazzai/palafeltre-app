@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
+import { getToken, setToken as storeToken } from '../auth'
 
 type Shift = { id:number; user_id:number; role:string; start_time:string; end_time:string; created_by:number }
 
 export function MyShifts(){
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(getToken())
   const [shifts, setShifts] = useState<Shift[]>([])
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function load(){
@@ -21,7 +22,7 @@ export function MyShifts(){
         <h2 style={{margin:0}}>I miei turni</h2>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <input className="input" placeholder="Bearer token" value={token} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)} />
-          <button className="btn btn-outline" onClick={() => localStorage.setItem('token', token)}>Salva token</button>
+          <button className="btn btn-outline" onClick={() => { storeToken(token); alert('Token salvato per la sessione') }}>Salva token</button>
         </div>
       </div>
       <div className="card">
