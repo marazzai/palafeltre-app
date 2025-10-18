@@ -36,7 +36,8 @@ export default function AdminObs(){
       if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Scan failed: '+(txt||r.status)); return }
       const d = await r.json()
       setScenes(d.scenes || [])
-      setStatus(`Trovate ${(d.scenes||[]).length} scene`)
+  if (d.warning) setStatus(d.warning)
+  else setStatus(`Trovate ${(d.scenes||[]).length} scene`)
     }catch(e){ alert('Scan error') }
   }
 
@@ -50,7 +51,7 @@ export default function AdminObs(){
       { key: 'obs.activate_scene', value: activateScene || '' },
       { key: 'obs.deactivate_scene', value: deactivateScene || '' },
     ]
-    const s = await fetch('/api/v1/admin/settings', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(items) })
+  const s = await fetch('/api/v1/admin/settings', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(items) })
     if(!s.ok){ alert('Salvataggio scene fallito'); return }
     setStatus('Configurazione OBS salvata')
     setSaving(false)
@@ -63,9 +64,11 @@ export default function AdminObs(){
     setStatus('Invio test...')
     try{
       const body = { action, scene: sceneName || (action==='activate'? activateScene: deactivateScene) }
-      const r = await fetch('/api/v1/admin/obs/trigger', { method: 'POST', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+      // include persist flag when testing so mapping gets saved as user expects
+      const r = await fetch('/api/v1/admin/obs/trigger', { method: 'POST', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ ...body, persist: true }) })
       if(!r.ok){ const txt = await r.text().catch(()=>null); setStatus('Errore test: '+(txt||r.status)); return }
-      setStatus('Test inviato')
+      const j = await r.json().catch(()=>null)
+      setStatus(j && j.obs_changed ? 'Test inviato (OBS cambiata)' : 'Test inviato (OBS non raggiunta)')
     }catch(e){ setStatus('Errore invio test') }
     setTimeout(()=> setStatus(null), 3000)
   }

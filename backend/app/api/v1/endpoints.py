@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -1262,6 +1262,17 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
         resp = ws.call(obsreq.GetSceneList())
         scenes = [s['sceneName'] for s in resp.getScenes()]
         ws.disconnect()
+        # persist cached scenes so UI can use them if future scans fail
+        try:
+            import json as _json
+            cache_row = db.query(AppSetting).filter(AppSetting.key == 'obs.scenes_cache').first()
+            if cache_row:
+                cache_row.value = _json.dumps(scenes)
+            else:
+                db.add(AppSetting(key='obs.scenes_cache', value=_json.dumps(scenes)))
+            db.commit()
+        except Exception:
+            logger.exception('Failed to persist obs.scenes_cache')
         return {'scenes': scenes}
     except Exception as e:
         # Log full exception with traceback on the server for diagnostics
@@ -1282,6 +1293,17 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
                 from ...services.obs_v5 import get_scene_list, ObsV5Error
                 try:
                     scenes = get_scene_list(host, port, pwd)
+                    # persist cache
+                    try:
+                        import json as _json
+                        cache_row = db.query(AppSetting).filter(AppSetting.key == 'obs.scenes_cache').first()
+                        if cache_row:
+                            cache_row.value = _json.dumps(scenes)
+                        else:
+                            db.add(AppSetting(key='obs.scenes_cache', value=_json.dumps(scenes)))
+                        db.commit()
+                    except Exception:
+                        logger.exception('Failed to persist obs.scenes_cache (v5)')
                     return {'scenes': scenes}
                 except ObsV5Error as ov5e:
                     logger.exception('OBS v5 helper failed')
@@ -1290,7 +1312,19 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
                 logger.exception('Failed to import obs_v5 helper')
                 raise HTTPException(status_code=500, detail=f'Connection failed: {type(e).__name__}: {str(e)}. Additionally failed to use v5 fallback: {import_e}')
 
-        # Return the original error if not protocol mismatch / fallback not available
+        # On error, try to return cached scenes if available so UI remains usable
+        try:
+            import json as _json
+            cache_row = db.query(AppSetting).filter(AppSetting.key == 'obs.scenes_cache').first()
+            if cache_row and getattr(cache_row, 'value', None):
+                try:
+                    cached = _json.loads(cache_row.value)
+                    return {'scenes': cached, 'warning': 'Live scan failed, showing cached scenes'}
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # Return the original error if no cache
         try:
             detail = f"{type(e).__name__}: {str(e)}"
         except Exception:
@@ -1371,7 +1405,7 @@ def me_role_pages(db: Session = Depends(get_db), current: User = Depends(get_cur
 
 
 @router.post('/admin/obs/trigger')
-def admin_obs_trigger(data: dict, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+def admin_obs_trigger(data: dict, db: Session = Depends(get_db), current: User = Depends(require_admin), background: BackgroundTasks | None = None):
     """Trigger an OBS scene change broadcast. Expected body: { action: 'activate'|'deactivate', scene: 'SceneName' }
     This will broadcast on the 'control' websocket room the message { type: 'obsScene', payload: { scene: '<name>' } }"""
     action = data.get('action')
@@ -1380,14 +1414,76 @@ def admin_obs_trigger(data: dict, db: Session = Depends(get_db), current: User =
         raise HTTPException(status_code=400, detail='Invalid action')
     if not scene:
         raise HTTPException(status_code=400, detail='Missing scene')
-    # Broadcast
+    # Optionally persist the mapping if caller included 'persist': true
     try:
-        asyncio.create_task(ws_manager.broadcast('control', { 'type': 'obsScene', 'payload': { 'scene': scene, 'action': action } }))
+        if data.get('persist'):
+            key = 'obs.activate_scene' if action == 'activate' else 'obs.deactivate_scene'
+            row = db.query(AppSetting).filter(AppSetting.key == key).first()
+            if row:
+                row.value = scene
+            else:
+                db.add(AppSetting(key=key, value=scene))
+            db.add(AuditLog(user_id=current.id, action='obs.mapping.save', details=f'{key}={scene}'))
+            db.commit()
     except Exception:
-        raise HTTPException(status_code=500, detail='Broadcast failed')
-    db.add(AuditLog(user_id=current.id, action='obs.trigger', details=f'{action}:{scene}'))
+        # don't block on settings save
+        logger.exception('Failed to persist obs mapping')
+    # Try to change scene directly on OBS (best-effort): try v4 client then v5 helper
+    host = _get_setting_value(db, 'obs.host', '') or ''
+    port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
+    pwd = _get_setting_value(db, 'obs.password', '') or ''
+    obs_changed = False
+    try:
+        try:
+            from obswebsocket import obsws, requests as obsreq  # type: ignore
+            try:
+                ws = obsws(host, port, pwd)
+                ws.connect()
+                # v4 API: SetCurrentScene
+                ws.call(obsreq.SetCurrentScene(scene))
+                ws.disconnect()
+                obs_changed = True
+            except Exception:
+                logger.exception('OBS v4 SetCurrentScene failed')
+        except Exception:
+            logger.debug('obswebsocket v4 client not available or failed import')
+
+        if not obs_changed:
+            # try v5 helper
+            try:
+                from ...services.obs_v5 import set_current_scene, ObsV5Error
+                try:
+                    if set_current_scene(host, port, scene, pwd):
+                        obs_changed = True
+                except ObsV5Error:
+                    logger.exception('OBS v5 SetCurrentScene failed')
+            except Exception:
+                logger.debug('obs_v5 helper not available')
+    except Exception:
+        logger.exception('Unexpected error while attempting direct OBS scene change')
+
+    # Broadcast to internal websocket rooms regardless of direct OBS success
+    try:
+        # schedule broadcast as a background task to avoid depending on an active loop here
+        payload = { 'type': 'obsScene', 'payload': { 'scene': scene, 'action': action } }
+        if background is not None:
+            background.add_task(ws_manager.broadcast, 'control', payload)
+        else:
+            # fallback: try to create task (older behavior)
+            try:
+                asyncio.create_task(ws_manager.broadcast('control', payload))
+            except Exception:
+                logger.exception('Broadcast to control room failed')
+                raise HTTPException(status_code=500, detail='Broadcast failed')
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception('Failed to schedule broadcast')
+        raise HTTPException(status_code=500, detail='Broadcast scheduling failed')
+
+    db.add(AuditLog(user_id=current.id, action='obs.trigger', details=f'{action}:{scene},obs_changed={obs_changed}'))
     db.commit()
-    return {'ok': True}
+    return {'ok': True, 'obs_changed': obs_changed}
 
 class AuditOut(BaseModel):
     id: int

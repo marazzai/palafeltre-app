@@ -81,3 +81,56 @@ def get_scene_list(host: str, port: int, password: str = '', timeout: float = 5.
                 ws.close()
         except Exception:
             pass
+
+
+def set_current_scene(host: str, port: int, scene_name: str, password: str = '', timeout: float = 5.0) -> bool:
+    """Attempt to set the current program scene on an OBS v5 websocket server.
+
+    Returns True if the request was acknowledged. Raises ObsV5Error on failure.
+    """
+    url = f"ws://{host}:{port}"
+    ws = None
+    try:
+        logger.debug("Connecting to OBS v5 websocket at %s for SetCurrentScene", url)
+        ws = websocket.create_connection(url, timeout=timeout)
+        hello_raw = ws.recv()
+        hello = json.loads(hello_raw)
+        logger.debug("OBS hello: %s", hello_raw)
+
+        if hello.get('op') == 0 and isinstance(hello.get('d'), dict):
+            auth = hello['d'].get('authentication', None)
+            if auth and password is not None:
+                raise ObsV5Error('OBS WebSocket v5 requires authentication (challenge) — cannot set scene without implementing auth')
+
+        # requestId 1
+        payload = {"op": 6, "d": {"requestType": "SetCurrentProgramScene", "requestId": "1", "requestData": {"sceneName": scene_name}}}
+        ws.send(json.dumps(payload))
+        start = time.time()
+        while True:
+            if time.time() - start > timeout:
+                raise ObsV5Error('Timeout waiting for SetCurrentProgramScene response')
+            raw = ws.recv()
+            if not raw:
+                continue
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            d = msg.get('d') or {}
+            if isinstance(d, dict) and d.get('requestId') == '1':
+                # check for error field
+                resp_type = d.get('responseType') or ''
+                if isinstance(resp_type, str) and resp_type.lower().startswith('error'):
+                    raise ObsV5Error(f"OBS responded with error: {resp_type}")
+                return True
+    except ObsV5Error:
+        raise
+    except Exception as e:
+        logger.exception('Error setting scene on OBS v5 websocket')
+        raise ObsV5Error(str(e))
+    finally:
+        try:
+            if ws:
+                ws.close()
+        except Exception:
+            pass

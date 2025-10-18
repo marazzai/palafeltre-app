@@ -75,8 +75,9 @@ export default function AdminPanel(): JSX.Element {
         return
       }
       const d = await r.json()
-      setScenes(d.scenes || [])
-      setStatus(`Trovate ${(d.scenes || []).length} scene`)
+  setScenes(d.scenes || [])
+  if (d.warning) setStatus(d.warning)
+  else setStatus(`Trovate ${(d.scenes || []).length} scene`)
     } catch (e) {
       setStatus('Scan error: ' + String(e))
     } finally {
@@ -98,7 +99,12 @@ export default function AdminPanel(): JSX.Element {
         setStatus('Errore trigger: ' + (t || r.status))
         return
       }
-      setStatus('Trigger inviato')
+      const j = await r.json().catch(() => null)
+      if (j && typeof j.obs_changed !== 'undefined') {
+        setStatus(j.obs_changed ? 'Trigger inviato (OBS cambiata)' : 'Trigger inviato (OBS non raggiunta)')
+      } else {
+        setStatus('Trigger inviato')
+      }
     } catch (e) {
       setStatus('Errore: ' + String(e))
     } finally {
