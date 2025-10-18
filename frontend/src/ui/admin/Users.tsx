@@ -22,6 +22,12 @@ export default function AdminUsers(){
   const [rolesList, setRolesList] = useState<{id:number;name:string}[]>([])
   const [editingRolesFor, setEditingRolesFor] = useState<UserOut | null>(null)
   const [editingRoleIds, setEditingRoleIds] = useState<number[]>([])
+  const [editingUser, setEditingUser] = useState<UserOut | null>(null)
+  const [editUsername, setEditUsername] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editFullName, setEditFullName] = useState('')
+  const [editIsActive, setEditIsActive] = useState(true)
+  const [editMustChange, setEditMustChange] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const load = async ()=>{
@@ -80,6 +86,23 @@ export default function AdminUsers(){
     const ids = rolesList.filter(r=> (u.roles||[]).includes(r.name)).map(r=> r.id)
     setEditingRoleIds(ids)
   }
+  const openEditUser = (u: UserOut) =>{
+    setEditingUser(u)
+    setEditUsername(u.username || '')
+    setEditEmail(u.email)
+    setEditFullName(u.full_name || '')
+    setEditIsActive(u.is_active)
+    setEditMustChange(!!u.must_change_password)
+  }
+  const saveEditUser = async ()=>{
+    if(!editingUser) return
+    const payload: any = { username: editUsername || undefined, email: editEmail || undefined, full_name: editFullName || undefined, is_active: editIsActive, must_change_password: editMustChange }
+    try{
+      const res = await fetch(`/api/v1/users/${editingUser.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify(payload) })
+      if(!res.ok){ alert('Errore aggiornamento utente'); return }
+      setEditingUser(null); load()
+    }catch(e){ console.error(e); alert('Errore di rete') }
+  }
   const toggleRole = (id:number)=> setEditingRoleIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
   const saveRoles = async ()=>{
     if(!editingRolesFor) return
@@ -122,12 +145,31 @@ export default function AdminUsers(){
                 <td>{u.must_change_password ? 'Sì' : 'No'}</td>
                 <td style={{display:'flex', gap:6}}>
                   <button onClick={() => openEditRoles(u)}>Ruoli</button>
+                  <button onClick={() => openEditUser(u)}>Modifica</button>
                   <button onClick={() => resetPwd(u.id)}>Reset pwd</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {editingUser && (
+        <div className="modal is-open" onClick={()=> setEditingUser(null)}>
+          <div className="modal-content" onClick={e=> e.stopPropagation()}>
+            <div className="modal-header"><strong>Modifica utente {editingUser.email}</strong></div>
+            <div className="modal-body" style={{display:'grid', gap:8}}>
+              <label>Username<input value={editUsername} onChange={e=> setEditUsername(e.target.value)} /></label>
+              <label>Email<input value={editEmail} onChange={e=> setEditEmail(e.target.value)} /></label>
+              <label>Nome completo<input value={editFullName} onChange={e=> setEditFullName(e.target.value)} /></label>
+              <label style={{display:'flex', gap:8, alignItems:'center'}}><input type="checkbox" checked={editIsActive} onChange={e=> setEditIsActive(e.target.checked)} /> Attivo</label>
+              <label style={{display:'flex', gap:8, alignItems:'center'}}><input type="checkbox" checked={editMustChange} onChange={e=> setEditMustChange(e.target.checked)} /> Forza cambio password al login</label>
+            </div>
+            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+              <button className="btn btn-outline" onClick={()=> setEditingUser(null)}>Annulla</button>
+              <button className="btn" onClick={saveEditUser}>Salva</button>
+            </div>
+          </div>
+        </div>
       )}
       {editingRolesFor && (
         <div className="modal is-open" onClick={()=> setEditingRolesFor(null)}>

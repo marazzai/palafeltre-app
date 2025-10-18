@@ -585,10 +585,25 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), _
     user = db.query(User).get(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
+    # username column may be missing on older databases
+    if data.username is not None:
+        try:
+            if _has_username_column(db):
+                user.username = data.username
+        except Exception:
+            # ignore if inspection fails
+            pass
+    if data.email is not None:
+        user.email = data.email
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.is_active is not None:
         user.is_active = data.is_active
+    if data.must_change_password is not None:
+        try:
+            user.must_change_password = bool(data.must_change_password)
+        except Exception:
+            pass
     db.commit()
     db.refresh(user)
     return UserOut(id=user.id, email=user.email, full_name=user.full_name, is_active=user.is_active, roles=[r.name for r in user.roles])
