@@ -5,6 +5,8 @@ type Penalty = { id:number; team:'home'|'away'; player_number:string; remaining:
 type GameState = {
   homeName: string
   awayName: string
+  colorHome?: string
+  colorAway?: string
   scoreHome: number
   scoreAway: number
   shotsHome: number
@@ -14,8 +16,10 @@ type GameState = {
   timerRunning: boolean
   timerRemaining: number
   periodDuration: number
+  intervalDuration?: number
   timeoutRemaining: number
   sirenOn: boolean
+  sirenEveryMinute?: boolean
   obsVisible: boolean
   penalties: Penalty[]
 }
@@ -40,6 +44,8 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
   return {
     homeName: raw.homeName ?? 'Casa',
     awayName: raw.awayName ?? 'Ospiti',
+    colorHome: raw.colorHome ?? '#ff4444',
+    colorAway: raw.colorAway ?? '#44aaff',
     scoreHome: Number(raw.scoreHome ?? 0),
     scoreAway: Number(raw.scoreAway ?? 0),
     shotsHome: Number(raw.shotsHome ?? 0),
@@ -49,8 +55,10 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
     timerRunning: Boolean(raw.timerRunning),
     timerRemaining: Number(raw.timerRemaining ?? (20*60)),
     periodDuration: Number(raw.periodDuration ?? (20*60)),
+    intervalDuration: Number(raw.intervalDuration ?? (15*60)),
     timeoutRemaining: Math.max(0, Number(raw.timeoutRemaining ?? 0)),
     sirenOn: Boolean(raw.sirenOn),
+    sirenEveryMinute: Boolean(raw.sirenEveryMinute ?? false),
     obsVisible: raw.obsVisible !== false,
     penalties: Array.isArray(raw.penalties) ? (raw.penalties as Penalty[]) : [],
   }
@@ -59,12 +67,12 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
 export function GameControl(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
-  const [setup, setSetup] = useState({ home:'Casa', away:'Ospiti', duration:'20:00' })
+  const [setup, setSetup] = useState({ home:'Casa', away:'Ospiti', duration:'20:00', interval:'15:00', colorHome:'#ff4444', colorAway:'#44aaff', sirenEveryMinute:false })
   const [penModal, setPenModal] = useState<{ team:'home'|'away'; open:boolean }>({ team:'home', open:false })
   const [pen, setPen] = useState<{ number:string; minutes:number }>({ number:'', minutes:2 })
   const [log, setLog] = useState<Array<{ ts:number; text:string }>>([])
 
-  const token = localStorage.getItem('token') || ''
+  const token = sessionStorage.getItem('token') || ''
   useEffect(() => {
     fetch('/api/v1/game/state').then(r => r.json()).then((s)=> setState(normalizeState(s))).catch(() => {})
   }, [])
@@ -94,7 +102,15 @@ export function GameControl(){
 
   async function startGame(){
     try{
-      await post('/api/v1/game/setup', { home_name: setup.home, away_name: setup.away, period_duration: setup.duration })
+      await post('/api/v1/game/setup', { 
+        home_name: setup.home, 
+        away_name: setup.away, 
+        period_duration: setup.duration,
+        interval_duration: setup.interval,
+        color_home: setup.colorHome,
+        color_away: setup.colorAway,
+        siren_every_minute: setup.sirenEveryMinute
+      })
       appendLog(`Partita avviata: ${setup.home} vs ${setup.away}`)
     }catch(e){ console.error(e) }
   }
@@ -161,22 +177,46 @@ export function GameControl(){
 
   return (
     <div className="container">
-      <h2 style={{ marginBottom: 12 }}>Pannello di Controllo Partita</h2>
+      <h2 style={{ marginBottom: 12 }}>Tabellone — Controllo</h2>
 
+      {/* Riepilogo in alto */}
       <div className="card" style={{marginBottom:16}}>
-        <div className="card-body" style={{display:'flex', gap:8, alignItems:'center'}}>
-          <span className="text-muted" style={{fontSize:12}}>WS: {status} | Token: {token ? '✓' : '✗'}</span>
+        <div className="card-body" style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12, alignItems:'center'}}>
+          <div>
+            <div className="text-muted" style={{fontSize:12, textTransform:'uppercase', letterSpacing:1}}>Tempo</div>
+            <div style={{fontSize:28, fontWeight:700}}>{formatTime(state.timerRemaining)} {state.timerRunning? '•' : ''}</div>
+          </div>
+          <div>
+            <div className="text-muted" style={{fontSize:12, textTransform:'uppercase', letterSpacing:1}}>Periodo</div>
+            <div style={{fontSize:20, fontWeight:600}}>{state.period}</div>
+          </div>
+          <div>
+            <div className="text-muted" style={{fontSize:12}}>Goal</div>
+            <div style={{fontSize:20}}><strong style={{color:state.colorHome}}>{state.homeName}</strong> {state.scoreHome} - {state.scoreAway} <strong style={{color:state.colorAway}}>{state.awayName}</strong></div>
+          </div>
+          <div className="text-muted" style={{fontSize:12}}>WS: {status} · OBS: {state.obsVisible? 'Visibile' : 'Nascosta'} · Timeout: {state.timeoutRemaining>0? `${state.timeoutRemaining}s` : '—'}</div>
         </div>
       </div>
 
+      {/* Configurazione */}
       <div className="card">
-        <div className="card-header"><strong>Setup Partita</strong></div>
-        <div className="card-body" style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+        <div className="card-header"><strong>Configurazione</strong></div>
+        <div className="card-body" style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:12, alignItems:'center'}}>
           <input className="input" placeholder="Casa" value={setup.home} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, home: e.target.value })} />
           <input className="input" placeholder="Ospiti" value={setup.away} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, away: e.target.value })} />
-          <input className="input" placeholder="Durata (MM:SS)" value={setup.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, duration: e.target.value })} />
-          <button className="btn" onClick={startGame}>Inizia Partita</button>
-          <a className="btn btn-outline" href="/scoreboard" target="_blank" rel="noreferrer">Apri Scoreboard</a>
+          <input className="input" type="color" aria-label="Colore Casa" value={setup.colorHome} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorHome: e.target.value })} />
+          <input className="input" type="color" aria-label="Colore Ospiti" value={setup.colorAway} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorAway: e.target.value })} />
+          <input className="input" placeholder="Durata periodo (MM:SS)" value={setup.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, duration: e.target.value })} />
+          <input className="input" placeholder="Intervallo (MM:SS)" value={setup.interval} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, interval: e.target.value })} />
+          <label style={{display:'flex', alignItems:'center', gap:8}}>
+            <input type="checkbox" checked={setup.sirenEveryMinute} onChange={(e)=> setSetup({ ...setup, sirenEveryMinute: e.target.checked })} />
+            Sirena ogni minuto
+          </label>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <button className="btn" onClick={startGame}>Applica configurazione</button>
+            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} onClick={toggleObs}>{state.obsVisible ? 'Disattiva scena' : 'Attiva scena'}</button>
+            <a className="btn btn-outline" href="/scoreboard" target="_blank" rel="noreferrer">Apri Scoreboard</a>
+          </div>
         </div>
       </div>
 

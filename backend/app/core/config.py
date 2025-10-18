@@ -25,7 +25,8 @@ class Settings:
         )
         self.jwt_secret: str = os.getenv("JWT_SECRET", "change-me-in-prod")
         self.jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
-        self.access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+        # 0 = no expiry claim in tokens (session-only on frontend)
+        self.access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "0"))
         # Admin bootstrap configuration
         self.admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
         self.admin_email: str = os.getenv("ADMIN_EMAIL", "admin@example.com")

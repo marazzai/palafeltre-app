@@ -1383,13 +1383,17 @@ class GameState(BaseModel):
     home_name: str = "Casa"
     away_name: str = "Ospiti"
     period_duration_seconds: int = 20*60
+    interval_duration_seconds: int = 15*60
     period_index: int = 1  # 1,2,3,4(OT)
+    color_home: str = "#ff4444"
+    color_away: str = "#44aaff"
     score_home: int = 0
     score_away: int = 0
     shots_home: int = 0
     shots_away: int = 0
     timeout_remaining: int = 0  # seconds, 0 when no timeout running
     siren_on: bool = False
+    siren_every_minute: bool = False
     obs_visible: bool = True
     timer_running: bool = False
     timer_remaining: int = 20*60
@@ -1406,6 +1410,8 @@ def _snapshot_state() -> dict:
     return {
         "homeName": game_state.home_name,
         "awayName": game_state.away_name,
+        "colorHome": game_state.color_home,
+        "colorAway": game_state.color_away,
         "scoreHome": game_state.score_home,
         "scoreAway": game_state.score_away,
         "shotsHome": game_state.shots_home,
@@ -1415,8 +1421,10 @@ def _snapshot_state() -> dict:
         "timerRunning": game_state.timer_running,
         "timerRemaining": game_state.timer_remaining,
         "periodDuration": game_state.period_duration_seconds,
+        "intervalDuration": game_state.interval_duration_seconds,
         "timeoutRemaining": game_state.timeout_remaining,
         "sirenOn": game_state.siren_on,
+        "sirenEveryMinute": game_state.siren_every_minute,
         "obsVisible": game_state.obs_visible,
         "penalties": [p.model_dump() for p in game_state.penalties],
     }
@@ -1425,6 +1433,10 @@ class GameSetupRequest(BaseModel):
     home_name: str
     away_name: str
     period_duration: str  # "MM:SS"
+    interval_duration: str | None = None  # "MM:SS"
+    color_home: str | None = None
+    color_away: str | None = None
+    siren_every_minute: bool | None = None
 
 def _parse_mmss(v: str) -> int:
     try:
@@ -1441,6 +1453,14 @@ async def game_setup(data: GameSetupRequest, _: User = Depends(require_permissio
         game_state.home_name = data.home_name
         game_state.away_name = data.away_name
         game_state.period_duration_seconds = secs
+        if data.interval_duration:
+            game_state.interval_duration_seconds = _parse_mmss(data.interval_duration)
+        if data.color_home:
+            game_state.color_home = data.color_home
+        if data.color_away:
+            game_state.color_away = data.color_away
+        if data.siren_every_minute is not None:
+            game_state.siren_every_minute = bool(data.siren_every_minute)
         game_state.period_index = 1
         game_state.score_home = 0
         game_state.score_away = 0
@@ -1448,6 +1468,35 @@ async def game_setup(data: GameSetupRequest, _: User = Depends(require_permissio
         game_state.timer_remaining = secs
         game_state.penalties = []
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+    return {"ok": True}
+
+class GameConfigPatch(BaseModel):
+    home_name: str | None = None
+    away_name: str | None = None
+    color_home: str | None = None
+    color_away: str | None = None
+    period_duration: str | None = None
+    interval_duration: str | None = None
+    siren_every_minute: bool | None = None
+
+@router.patch("/game/config")
+async def game_config_patch(data: GameConfigPatch, _: User = Depends(require_permission('game.control'))):
+    async with game_lock:
+        if data.home_name is not None:
+            game_state.home_name = data.home_name
+        if data.away_name is not None:
+            game_state.away_name = data.away_name
+        if data.color_home is not None:
+            game_state.color_home = data.color_home
+        if data.color_away is not None:
+            game_state.color_away = data.color_away
+        if data.period_duration is not None:
+            game_state.period_duration_seconds = _parse_mmss(data.period_duration)
+        if data.interval_duration is not None:
+            game_state.interval_duration_seconds = _parse_mmss(data.interval_duration)
+        if data.siren_every_minute is not None:
+            game_state.siren_every_minute = bool(data.siren_every_minute)
+        await ws_manager.broadcast('game', {"type":"state","payload": _snapshot_state()})
     return {"ok": True}
 
 # Admin: Ticket Categories CRUD
@@ -1890,6 +1939,7 @@ async def game_scheduler():
     while True:
         await asyncio.sleep(1)
         changed = False
+        just_pulsed = False
         removed_ids: List[int] = []
         async with game_lock:
             if game_state.timer_running and game_state.timer_remaining > 0:
@@ -1897,7 +1947,12 @@ async def game_scheduler():
                 if game_state.timer_remaining <= 0:
                     game_state.timer_remaining = 0
                     game_state.timer_running = False
+                    # end of period: auto set interval timer
+                    game_state.timer_remaining = game_state.interval_duration_seconds
                 changed = True
+                # siren pulse each minute if option enabled
+                if game_state.siren_every_minute and game_state.timer_remaining % 60 == 0:
+                    just_pulsed = True
             # timeout countdown
             if game_state.timeout_remaining > 0:
                 game_state.timeout_remaining -= 1
@@ -1916,6 +1971,12 @@ async def game_scheduler():
         if changed:
             try:
                 await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+            except Exception:
+                pass
+        # trigger siren pulse event, outside lock
+        if just_pulsed:
+            try:
+                await ws_manager.broadcast('game', {"type": "sirenPulse", "payload": {"at": int(datetime.now(timezone.utc).timestamp())}})
             except Exception:
                 pass
 

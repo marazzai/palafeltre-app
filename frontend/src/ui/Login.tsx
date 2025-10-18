@@ -21,8 +21,8 @@ export default function Login(){
         const msg = r.status === 401 ? 'Credenziali non valide' : 'Server non disponibile'
         throw new Error(msg)
       }
-  const data = await r.json()
-  setToken(data.access_token, typeof data.expires_in==='number'? data.expires_in: undefined)
+      const data = await r.json()
+      setToken(data.access_token)
       navigate('/')
     }catch(err: any){
       setError(err.message || 'Server non disponibile')

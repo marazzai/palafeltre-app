@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { clearToken, getToken, getTokenExpiry, setToken } from '../auth'
+import { clearToken, getToken } from '../auth'
 import { useNotifications } from '../utils/useNotifications'
 import { NotificationCenter } from '../components/NotificationCenter'
 
@@ -50,25 +50,7 @@ export function AppLayout(){
       .then((me: UserInfo) => setUser(me))
       .catch(()=> setUser(null))
   },[])
-  // token expiry and auto-refresh
-  const [remaining, setRemaining] = useState<number | null>(null)
-  useEffect(()=>{
-    const tick = ()=>{
-      const at = getTokenExpiry(); if(!at){ setRemaining(null); return }
-      const sec = Math.max(0, Math.floor((at - Date.now())/1000))
-      setRemaining(sec)
-      if(sec > 0 && sec <= 60){
-        // try background refresh once when under 60s
-        fetch('/api/v1/auth/refresh', { method:'POST', headers:{ Authorization: `Bearer ${getToken()}` } })
-          .then(r=> r.ok? r.json(): Promise.reject())
-          .then(d=>{ if(d.access_token) setToken(d.access_token, d.expires_in) })
-          .catch(()=>{})
-      }
-    }
-    const id = setInterval(tick, 1000)
-    tick()
-    return ()=> clearInterval(id)
-  },[])
+  // session-only auth: no refresh or countdown
   
   function onLogout(){
     clearToken()
@@ -117,10 +99,7 @@ export function AppLayout(){
         <header className="header">
           <button className="btn btn-outline" onClick={() => setOpen(!open)} aria-label="Apri menu"><Icon name="menu" /></button>
           <div style={{display:'flex', gap:12, alignItems:'center'}}>
-            <span className="text-muted" style={{fontSize:14}}>
-              {user ? `Ciao, ${user.username}` : 'Benvenuto'}
-              {remaining!=null? ` · ${Math.floor((remaining||0)/60)}:${String((remaining||0)%60).padStart(2,'0')}` : ''}
-            </span>
+            <span className="text-muted" style={{fontSize:14}}>{user ? `Ciao, ${user.username}` : 'Benvenuto'}</span>
             {getToken() && (
               <NotificationCenter
                 notifications={notifications}

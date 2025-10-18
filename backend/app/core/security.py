@@ -13,14 +13,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    # When ACCESS_TOKEN_EXPIRE_MINUTES == 0, issue a token without exp claim
     if expires_delta is None:
-        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
-    expire = datetime.now(timezone.utc) + expires_delta
-    to_encode = {"sub": subject, "exp": expire}
+        minutes = settings.access_token_expire_minutes
+        if minutes and minutes > 0:
+            expires_delta = timedelta(minutes=minutes)
+        else:
+            expires_delta = None
+    to_encode = {"sub": subject}
+    if expires_delta is not None:
+        expire = datetime.now(timezone.utc) + expires_delta
+        # jose accepts numeric exp (seconds since epoch)
+        to_encode["exp"] = int(expire.timestamp())
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        # Options: don't require exp if not present (session-only mode)
+        return jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            options={"verify_signature": True, "verify_exp": True, "require_exp": False},
+        )
     except JWTError:
         return None
