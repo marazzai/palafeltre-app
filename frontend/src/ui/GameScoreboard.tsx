@@ -53,6 +53,24 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
 export function GameScoreboard(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
+  const [viewport, setViewport] = useState<{ w?: number; h?: number; mt: number; mr: number; mb: number; ml: number }>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const w = Number(params.get('w') || '')
+    const h = Number(params.get('h') || '')
+    const margin = Number(params.get('margin') || '')
+    const mt = Number(params.get('mt') || (Number.isFinite(margin) ? margin : ''))
+    const mr = Number(params.get('mr') || (Number.isFinite(margin) ? margin : ''))
+    const mb = Number(params.get('mb') || (Number.isFinite(margin) ? margin : ''))
+    const ml = Number(params.get('ml') || (Number.isFinite(margin) ? margin : ''))
+    return {
+      w: Number.isFinite(w) && w > 0 ? w : undefined,
+      h: Number.isFinite(h) && h > 0 ? h : undefined,
+      mt: Number.isFinite(mt) && mt >= 0 ? mt : 0,
+      mr: Number.isFinite(mr) && mr >= 0 ? mr : 0,
+      mb: Number.isFinite(mb) && mb >= 0 ? mb : 0,
+      ml: Number.isFinite(ml) && ml >= 0 ? ml : 0,
+    }
+  })
 
   // Load scoreboard fonts (Orbitron for digits, Oswald for labels)
   useEffect(() => {
@@ -88,14 +106,18 @@ export function GameScoreboard(){
   function formatTime(total: number){ const m = Math.floor(total/60).toString().padStart(2,'0'); const s = (total%60).toString().padStart(2,'0'); return `${m}:${s}` }
 
   // Helpers
-  const penaltiesHome = state.penalties.filter(p => p.team==='home').sort((a,b)=>a.remaining-b.remaining).slice(0,2)
-  const penaltiesAway = state.penalties.filter(p => p.team==='away').sort((a,b)=>a.remaining-b.remaining).slice(0,2)
+  const sortAndPad = (items: Penalty[]) => {
+    const arr = items.sort((a,b)=>a.remaining-b.remaining)
+    return [arr[0] ?? null, arr[1] ?? null] as Array<Penalty | null>
+  }
+  const penaltiesHome = sortAndPad(state.penalties.filter(p => p.team==='home'))
+  const penaltiesAway = sortAndPad(state.penalties.filter(p => p.team==='away'))
 
   return (
-    <div className="scoreboard-root">
+    <div className="scoreboard-root" style={{padding: `${viewport.mt}px ${viewport.mr}px ${viewport.mb}px ${viewport.ml}px`}}>
       {/* Local styles to avoid leaking to the rest of the app */}
       <style>{`
-        .scoreboard-root { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #000014; color: #e8f1f8; }
+        .scoreboard-root { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #000014; color: #e8f1f8; overflow: hidden; }
         .sb-wrap { width: min(96vw, 1600px); aspect-ratio: 16/9; display: grid; grid-template-rows: 1fr auto; gap: 1.5vh; }
         .sb-main { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 1.2vw; align-items: stretch; }
         .team { display: grid; grid-template-rows: auto 1fr; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.2)); border: 2px solid rgba(255,255,255,0.15); border-radius: 12px; overflow: hidden; }
@@ -115,7 +137,7 @@ export function GameScoreboard(){
       `}</style>
 
       {!state.obsVisible && (<div className="badge">OBS nascosto</div>)}
-      <div className="sb-wrap">
+      <div className="sb-wrap" style={{ width: viewport.w ? `${viewport.w}px` : undefined, height: viewport.h ? `${viewport.h}px` : undefined, aspectRatio: viewport.w && viewport.h ? 'auto' as any : undefined }}>
         <div className="sb-main">
           <div className="team" style={{borderColor: 'rgba(255,255,255,0.15)'}}>
             <div className="team-name" style={{background: state.colorHome}}>{state.homeName}</div>
@@ -138,28 +160,32 @@ export function GameScoreboard(){
         </div>
         <div className="sb-bottom">
           <div className="pen-box" style={{borderColor: state.colorHome}}>
-            {penaltiesHome.length === 0 ? (
-              <div className="pen-card" style={{gridColumn: '1 / span 2', justifyContent:'center', opacity:.7}}>Nessuna penalità</div>
-            ) : (
-              penaltiesHome.map(p => (
-                <div className="pen-card" key={p.id}>
-                  <div className="pen-number" style={{color: state.colorHome}}>#{p.player_number}</div>
-                  <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
-                </div>
-              ))
-            )}
+            {penaltiesHome.map((p, idx) => (
+              <div className="pen-card" key={p ? p.id : `home-empty-${idx}`} style={!p ? {opacity:.5, justifyContent:'center'} : undefined}>
+                {p ? (
+                  <>
+                    <div className="pen-number" style={{color: state.colorHome}}>#{p.player_number}</div>
+                    <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
+                  </>
+                ) : (
+                  <div className="pen-time">—</div>
+                )}
+              </div>
+            ))}
           </div>
           <div className="pen-box" style={{borderColor: state.colorAway}}>
-            {penaltiesAway.length === 0 ? (
-              <div className="pen-card" style={{gridColumn: '1 / span 2', justifyContent:'center', opacity:.7}}>Nessuna penalità</div>
-            ) : (
-              penaltiesAway.map(p => (
-                <div className="pen-card" key={p.id}>
-                  <div className="pen-number" style={{color: state.colorAway}}>#{p.player_number}</div>
-                  <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
-                </div>
-              ))
-            )}
+            {penaltiesAway.map((p, idx) => (
+              <div className="pen-card" key={p ? p.id : `away-empty-${idx}`} style={!p ? {opacity:.5, justifyContent:'center'} : undefined}>
+                {p ? (
+                  <>
+                    <div className="pen-number" style={{color: state.colorAway}}>#{p.player_number}</div>
+                    <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
+                  </>
+                ) : (
+                  <div className="pen-time">—</div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
