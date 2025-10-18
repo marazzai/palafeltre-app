@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, Table, ForeignKey
+import datetime
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..db.session import Base
 
@@ -25,6 +26,8 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login: Mapped[datetime.datetime] | None = mapped_column(nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     roles = relationship("Role", secondary=user_roles, back_populates="users")
 
 class Role(Base):
