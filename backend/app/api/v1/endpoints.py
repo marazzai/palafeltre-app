@@ -24,8 +24,20 @@ import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
 from ...services.siren import siren_wav_bytes
 from fastapi import Form, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+except Exception:  # pragma: no cover - fallback for editor / dev machines without slowapi
+    # Minimal stubs so Pylance/editor don't report missing imports and runtime can operate
+    class Limiter:  # very small shim compatible with decorator usage in this module
+        def __init__(self, *args, **kwargs):
+            pass
+        def limit(self, *args, **kwargs):
+            def _inner(func):
+                return func
+            return _inner
+    def get_remote_address(request=None):
+        return None
 import logging
 
 limiter = Limiter(key_func=get_remote_address)
@@ -44,6 +56,14 @@ def _has_username_column(db: Session) -> bool:
     except Exception:
         # Default to True to align with current model; avoids breaking user creation/login on modern deployments
         return True
+
+
+def _get_setting_value(db: Session, key: str, default: str | None = None) -> str | None:
+    """Return AppSetting.value or default safely without confusing the type checker."""
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not row:
+        return default
+    return getattr(row, 'value', default)
 
 def get_db():
     db = SessionLocal()
@@ -110,7 +130,13 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     full_name: str | None = None
-    password: str
+    password: str | None = None
+
+class AdminCreateUser(BaseModel):
+    username: str | None = None
+    email: EmailStr
+    full_name: str | None = None
+    password: str | None = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -150,7 +176,58 @@ def refresh_token(current: User = Depends(get_current_user)):
 
 @router.get("/me", response_model=UserOut)
 def me(current: User = Depends(get_current_user)):
-    return UserOut(id=current.id, username=current.username, email=current.email, full_name=current.full_name, is_active=current.is_active, roles=[r.name for r in current.roles])
+    return UserOut(id=current.id, username=current.username, email=current.email, full_name=current.full_name, is_active=current.is_active, roles=[r.name for r in current.roles], last_login=current.last_login, must_change_password=bool(getattr(current,'must_change_password',False)))
+
+
+@router.post('/admin/users/create')
+def admin_create_user(data: AdminCreateUser, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    # Admin can provide a password or leave it empty to auto-generate one (returned in response)
+    import secrets, string
+    def gen_password(n=12):
+        alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
+        return ''.join(secrets.choice(alphabet) for _ in range(n))
+
+    username = data.username
+    if username is None:
+        # derive username from email local part
+        username = data.email.split('@',1)[0]
+    if _has_username_column(db):
+        if db.query(User).filter((User.email == data.email) | (User.username == username)).first():
+            raise HTTPException(status_code=400, detail='Username o email già in uso')
+    else:
+        if db.query(User).filter(User.email == data.email).first():
+            raise HTTPException(status_code=400, detail='Email già in uso')
+
+    pwd = data.password or gen_password(12)
+    user = User(username=username, email=data.email, full_name=data.full_name, hashed_password=hash_password(pwd))
+    user.must_change_password = True
+    db.add(user); db.commit(); db.refresh(user)
+    return { 'id': user.id, 'username': user.username, 'email': user.email, 'password': pwd }
+
+
+@router.post('/admin/users/{user_id}/reset_password')
+def admin_reset_user_password(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    import secrets, string
+    def gen_password(n=12):
+        alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
+        return ''.join(secrets.choice(alphabet) for _ in range(n))
+    u = db.query(User).get(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail='Utente non trovato')
+    pwd = gen_password(12)
+    u.hashed_password = hash_password(pwd)
+    u.must_change_password = True
+    db.add(u); db.commit(); db.refresh(u)
+    return {'id': u.id, 'username': u.username, 'password': pwd}
+
+
+@router.get('/me/permissions')
+def me_permissions(current: User = Depends(get_current_user)):
+    perms = set()
+    for r in current.roles:
+        for p in r.permissions:
+            perms.add(p.code)
+    return {'permissions': sorted(list(perms))}
 
 class DashboardSummary(BaseModel):
     greeting: str
@@ -212,14 +289,21 @@ def forgot_password(_: ForgotPasswordRequest):
 @router.post("/users", response_model=UserOut)
 def create_user(data: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     # Admin creates a user; password provided or autogenerated
+    import secrets, string
+    def gen_password(n=12):
+        alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
+        return ''.join(secrets.choice(alphabet) for _ in range(n))
+
     if _has_username_column(db):
         if db.query(User).filter((User.email == data.email) | (User.username == data.username)).first():
             raise HTTPException(status_code=400, detail="Username o email già in uso")
-        user = User(username=data.username, email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
+        pwd = data.password or gen_password(12)
+        user = User(username=data.username, email=data.email, full_name=data.full_name, hashed_password=hash_password(pwd))
     else:
         if db.query(User).filter(User.email == data.email).first():
             raise HTTPException(status_code=400, detail="Email già in uso")
-        user = User(email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password))
+        pwd = data.password or gen_password(12)
+        user = User(email=data.email, full_name=data.full_name, hashed_password=hash_password(pwd))
     # If created by admin via this endpoint, ensure user must change password on first login
     user.must_change_password = True
     db.add(user)
@@ -1125,6 +1209,47 @@ def admin_settings_set(items: list[SettingItem], db: Session = Depends(get_db), 
     db.add(AuditLog(user_id=current.id, action='settings.update', details=f"{len(items)} items"))
     db.commit()
     return {"ok": True}
+
+
+# OBS integration endpoints (best-effort: requires obs-websocket client lib on server)
+class ObsConfig(BaseModel):
+    host: str
+    port: int = 4455
+    password: str | None = None
+
+@router.put('/admin/obs/config')
+def admin_obs_config(data: ObsConfig, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    # store as app settings
+    kv = { 'obs.host': data.host, 'obs.port': str(data.port), 'obs.password': data.password or '' }
+    for k,v in kv.items():
+        row = db.query(AppSetting).filter(AppSetting.key==k).first()
+        if row: row.value = v
+        else: db.add(AppSetting(key=k, value=v))
+    db.add(AuditLog(user_id=current.id, action='obs.config', details=f"{data.host}:{data.port}"))
+    db.commit()
+    return { 'ok': True }
+
+
+@router.get('/admin/obs/scan')
+def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    # Try to import obs-websocket library and connect to list scenes.
+    try:
+        from obswebsocket import obsws, requests as obsreq  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=501, detail=f"obs-websocket client not available on server: {e}")
+    # read config
+    host = _get_setting_value(db, 'obs.host', '') or ''
+    port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
+    pwd = _get_setting_value(db, 'obs.password', '') or ''
+    try:
+        ws = obsws(host, port, pwd)
+        ws.connect()
+        resp = ws.call(obsreq.GetSceneList())
+        scenes = [s['sceneName'] for s in resp.getScenes()]
+        ws.disconnect()
+        return {'scenes': scenes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
 
 class AuditOut(BaseModel):
     id: int

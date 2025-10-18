@@ -47,7 +47,14 @@ export function AppLayout(){
     if(!t){ setUser(null); return }
     fetch('/api/v1/me', { headers: { Authorization: `Bearer ${t}` } })
       .then(r=> r.ok ? r.json() : Promise.reject())
-      .then((me: UserInfo) => setUser(me))
+      .then(async (me: UserInfo) => {
+        // also fetch permissions
+        try{
+          const p = await fetch('/api/v1/me/permissions', { headers: { Authorization: `Bearer ${t}` } }).then(r=> r.ok ? r.json() : { permissions: [] })
+          me.permissions = p.permissions || []
+        }catch{}
+        setUser(me)
+      })
       .catch(()=> setUser(null))
   },[])
   // session-only auth: no refresh or countdown

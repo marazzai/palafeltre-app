@@ -20,7 +20,8 @@ def create_access_token(subject: str, expires_delta: Optional[timedelta] = None)
             expires_delta = timedelta(minutes=minutes)
         else:
             expires_delta = None
-    to_encode = {"sub": subject}
+    # Allow non-str values (exp may be int) so static checkers don't complain
+    to_encode: dict[str, object] = {"sub": subject}
     if expires_delta is not None:
         expire = datetime.now(timezone.utc) + expires_delta
         # jose accepts numeric exp (seconds since epoch)

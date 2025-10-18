@@ -56,6 +56,7 @@ export function GameScoreboard(){
   const prevTimeRef = useRef<number>(state.timerRemaining)
   const sirenUrl = React.useMemo(() => `/api/v1/scoreboard/siren?v=${Date.now()}`,[ ])
   const [audioUnlocked, setAudioUnlocked] = useState<boolean>(false)
+  const [lastInteraction, setLastInteraction] = useState<string | null>(null)
   const [viewport, setViewport] = useState<{ w?: number; h?: number; mt: number; mr: number; mb: number; ml: number }>(() => {
     const params = new URLSearchParams(window.location.search)
     const w = Number(params.get('w') || '')
@@ -121,6 +122,44 @@ export function GameScoreboard(){
       setAudioUnlocked(false)
     })
   }, [sirenUrl])
+
+  // centralize unlock logic to avoid repetition
+  const unlockAudio = () => {
+    setLastInteraction((prev) => `overlay-gesture @ ${new Date().toLocaleTimeString()}`)
+    const a = audioRef.current
+    if(a){ a.muted = false; try{ a.volume = 0.01; a.currentTime = 0; a.play().then(() => { setTimeout(() => { try { a.pause(); a.currentTime = 0 } catch{} }, 150); setAudioUnlocked(true) }).catch(()=>{ console.warn('audio.play() promise rejected') }) }catch(e){ console.warn('audio play exception', e) } }
+    try { const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext; const ctx = new Ctx(); ctx.resume && ctx.resume(); setTimeout(() => { try { ctx.close() } catch{} }, 200) } catch{}
+  }
+
+  // capture document-level events (capture phase) to detect what OBS emits
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try{
+        if(ev.type === 'click' || ev.type === 'mousedown' || ev.type === 'pointerdown' || ev.type === 'touchstart'){
+          const e = ev as any
+          const coords = e.clientX != null ? `${e.clientX},${e.clientY}` : ''
+          setLastInteraction(`${ev.type} ${coords} @ ${new Date().toLocaleTimeString()}`)
+          console.debug('document event', ev.type, coords)
+        }
+        if(ev.type === 'keydown'){
+          const k = (ev as KeyboardEvent).key
+          setLastInteraction(`keydown ${k} @ ${new Date().toLocaleTimeString()}`)
+        }
+      }catch(e){ console.error(e) }
+    }
+    document.addEventListener('click', handler, true)
+    document.addEventListener('mousedown', handler, true)
+    document.addEventListener('pointerdown', handler, true)
+    document.addEventListener('touchstart', handler, true)
+    document.addEventListener('keydown', handler, true)
+    return () => {
+      document.removeEventListener('click', handler, true)
+      document.removeEventListener('mousedown', handler, true)
+      document.removeEventListener('pointerdown', handler, true)
+      document.removeEventListener('touchstart', handler, true)
+      document.removeEventListener('keydown', handler, true)
+    }
+  }, [])
 
   const playSiren = async () => {
     // Prefer audio file; if it plays successfully, do not run the synth fallback.
@@ -208,8 +247,9 @@ export function GameScoreboard(){
   .pen-time { font-family: 'Orbitron', sans-serif; font-weight:800; font-size: clamp(18px, 2.8vw, 46px); justify-self: end; }
         .badge { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 10px; background: #f97316; color: #000; border-radius: 999px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
         .ws { position: fixed; bottom: 10px; right: 12px; font-size: 12px; opacity: .6; font-family: 'Oswald', sans-serif; }
-        .unlock { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.6); }
-        .unlock-card { background: rgba(15, 53, 84, 0.95); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 18px 22px; text-align:center; max-width: 520px; margin: 16px; }
+  .unlock { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.6); z-index: 99999; pointer-events: auto; cursor: pointer; }
+  .unlock-card { background: rgba(15, 53, 84, 0.95); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 18px 22px; text-align:center; max-width: 520px; margin: 16px; cursor: pointer; }
+  .unlock-card:focus { outline: 3px solid rgba(249,115,22,0.6); }
         .unlock-title { font-family: 'Oswald', sans-serif; font-size: 22px; margin-bottom: 8px; }
         .unlock-text { font-size: 14px; opacity: .9; margin-bottom: 14px; }
         .unlock-btn { display:inline-block; padding: 10px 18px; border-radius: 8px; background: #f97316; color: #000; font-weight: 800; letter-spacing: .5px; cursor:pointer; border:none; }
@@ -218,16 +258,25 @@ export function GameScoreboard(){
 
       {!state.obsVisible && (<div className="badge">OBS nascosto</div>)}
       {!audioUnlocked && (
-        <div className="unlock">
-          <div className="unlock-card">
+        <div
+          className="unlock"
+          tabIndex={0}
+          onClick={() => unlockAudio()}
+          onPointerDown={() => { setLastInteraction('pointerdown overlay'); unlockAudio() }}
+          onTouchStart={() => { setLastInteraction('touchstart overlay'); unlockAudio() }}
+          onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { setLastInteraction(`key ${e.key}`); unlockAudio() } }}
+        >
+          <div className="unlock-card" tabIndex={0} role="button">
             <div className="unlock-title">Abilita audio</div>
             <div className="unlock-text">Per le policy del browser è necessario un clic per attivare i suoni del tabellone (sirena a fine periodo e ad ogni minuto).</div>
-            <button className="unlock-btn" onClick={() => {
-              const a = audioRef.current
-              if(a){ a.muted = false; a.volume = 0.01; a.currentTime = 0; a.play().then(() => { setTimeout(() => { try { a.pause(); a.currentTime = 0 } catch{} }, 150); setAudioUnlocked(true) }).catch(() => {}) }
-              // Also unlock WebAudio by creating/resuming a context in gesture
-              try { const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext; const ctx = new Ctx(); ctx.resume && ctx.resume(); setTimeout(() => { try { ctx.close() } catch{} }, 200) } catch{}
-            }}>Abilita audio</button>
+            <button className="unlock-btn" onClick={() => unlockAudio()}>Abilita audio</button>
+            <div style={{marginTop:10, fontSize:12, opacity:0.85}}>
+              <div>Debug evento: {lastInteraction ?? '—'}</div>
+              <div style={{marginTop:6, fontSize:11, color:'#ccc'}}>Se nulla appare qui quando clicchi da OBS o Chrome, l'evento non raggiunge la pagina.</div>
+              <div style={{marginTop:10}}>
+                <button className="unlock-btn" onClick={async ()=>{ unlockAudio(); try{ await playSiren() }catch{} }}>Prova sirena</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

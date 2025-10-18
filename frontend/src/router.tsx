@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from './ui/AppLayout'
 import AdminPanel from './ui/AdminPanel'
+import AdminUsers from './ui/admin/Users'
 import { Dashboard } from './ui/Dashboard'
 import { SkatingControl } from './ui/SkatingControl'
 import { SkatingPlayer } from './ui/SkatingPlayer'
@@ -8,6 +9,7 @@ import { SkatingDisplay } from './ui/SkatingDisplay'
 import { LockerRoomMonitor } from './ui/LockerRoomMonitor'
 import { GameControl } from './ui/GameControl'
 import { GameScoreboard } from './ui/GameScoreboard'
+import ChangePassword from './ui/ChangePassword'
 import { LightsControl } from './ui/LightsControl'
 import { TasksPage } from './ui/TasksPage'
 import { MaintenanceKanban } from './ui/MaintenanceKanban'
@@ -28,6 +30,7 @@ const Placeholder = ({ title }: { title: string }) => (
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/change-password', element: <ChangePassword /> },
   { path: '/scoreboard', element: <GameScoreboard /> },
   {
     path: '/',
@@ -51,6 +54,7 @@ export const router = createBrowserRouter([
           { path: 'shifts', element: <ShiftsPage /> },
           { path: 'skate-rental', element: <SkateRentalPage /> },
           { path: 'admin', element: <AdminPanel /> },
+          { path: 'admin/users', element: <AdminUsers /> },
         ],
       },
     ],

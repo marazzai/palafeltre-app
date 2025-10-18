@@ -19,6 +19,9 @@ export default function AdminPanel(){
   return (
     <div>
       <h1>Amministrazione</h1>
+      <div style={{marginBottom:8}}>
+        <button className="btn btn-outline" onClick={()=> navigate('/admin/users')}>Apri gestione Utenti (pagina dedicata)</button>
+      </div>
       <div style={{display:'flex', gap:8, marginBottom:12}}>
         <button className={tab==='users'?'btn':'btn btn-outline'} onClick={()=>setTab('users')}>Utenti & Ruoli</button>
         <button className={tab==='roles'?'btn':'btn btn-outline'} onClick={()=>setTab('roles')}>Permessi</button>
@@ -347,6 +350,17 @@ function ModulesSection(){
   }
       useEffect(()=>{ loadLogo('home'); loadLogo('away'); return ()=>{ try{ if(logoHomeUrl) URL.revokeObjectURL(logoHomeUrl); if(logoAwayUrl) URL.revokeObjectURL(logoAwayUrl) }catch{} } },[])
 
+      // OBS scan
+      const [obsScenes, setObsScenes] = useState<string[]>([])
+      const scanObs = async ()=>{
+        try{
+          const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
+          if(!r.ok){ const txt = await r.text(); alert('Scan failed: ' + txt); return }
+          const d = await r.json()
+          setObsScenes(d.scenes || [])
+        }catch(e){ alert('Scan error') }
+      }
+
   // Ticket categories
   type Cat = { id:number; name:string; color?:string; sort_order:number }
   const [cats, setCats] = useState<Cat[]>([])
@@ -383,6 +397,13 @@ function ModulesSection(){
         <label>OBS Porta<input value={settings['obs.port']||''} onChange={e=> set('obs.port', e.target.value)} /></label>
         <label>OBS Password<input type="password" value={settings['obs.password']||''} onChange={e=> set('obs.password', e.target.value)} /></label>
         <label>Scena OBS<input value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)} /></label>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <button className="btn btn-outline" onClick={scanObs}>Scansiona Scene OBS</button>
+          <select value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)}>
+            <option value="">-- seleziona scena --</option>
+            {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
         <label>Minuti anticipo jingle<input value={settings['skating.jingle_lead_minutes']||''} onChange={e=> set('skating.jingle_lead_minutes', e.target.value)} /></label>
       </div></div>
       <h4 style={{marginTop:12}}>File Audio</h4>

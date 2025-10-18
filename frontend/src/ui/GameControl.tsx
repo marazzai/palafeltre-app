@@ -261,7 +261,7 @@ export function GameControl(){
             Sirena ogni minuto
           </label>
           <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
-            <button className="btn" style={{minWidth:200}} onClick={() => confirmOrRun('applyConfig', startGame)} title="Imposta nomi squadre, colori e durate">{confirm['applyConfig'] && Date.now() < confirm['applyConfig'] ? 'Conferma applica' : 'Applica configurazione'}</button>
+            <button className="btn btn-primary" style={{minWidth:220}} onClick={() => confirmOrRun('applyConfig', startGame)} title="Imposta nomi squadre, colori e durate">{confirm['applyConfig'] && Date.now() < confirm['applyConfig'] ? 'Conferma applica' : 'Applica configurazione'}</button>
           </div>
         </div>
       </div>
@@ -292,7 +292,7 @@ export function GameControl(){
         <div className="card-body" style={{display:'grid', gridTemplateColumns:'1fr', gap:12}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
             <div style={{fontSize:48, fontWeight:800, minWidth:160, textAlign:'center'}} aria-label="Tempo di gioco">{formatTime(state.timerRemaining)}</div>
-            <button className={`btn ${state.timerRunning? '' : 'btn-outline'}`} style={{minWidth:220, padding:'18px 24px', fontSize:18}} onClick={() => state.timerRunning ? timerStop() : timerStart()} title="Avvia/Ferma il tempo di gioco">{state.timerRunning ? 'Stop' : 'Start'}</button>
+            <button className={`btn ${state.timerRunning? 'btn-primary' : 'btn-outline'}`} style={{minWidth:220, padding:'18px 24px', fontSize:18}} onClick={() => state.timerRunning ? timerStop() : timerStart()} title="Avvia/Ferma il tempo di gioco">{state.timerRunning ? 'Stop' : 'Start'}</button>
           </div>
           <div className="text-muted" style={{fontSize:12}}>Periodo attuale: {state.period}</div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8}}>
@@ -332,7 +332,7 @@ export function GameControl(){
           <div className="card-header"><strong>Intervallo</strong></div>
           <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
             <div className="text-muted" style={{fontSize:12}}>Durata configurata: {formatTime(state.intervalDuration || 0)}</div>
-            <button className="btn" onClick={intervalStart} disabled={!state.inInterval || state.timerRunning} title="Disponibile solo quando il periodo termina e l'intervallo è pronto">Avvia Intervallo</button>
+            <button className="btn btn-primary" onClick={intervalStart} disabled={!state.inInterval || state.timerRunning} title="Disponibile solo quando il periodo termina e l'intervallo è pronto">Avvia Intervallo</button>
             <button className="btn btn-outline" onClick={() => confirmOrRun('endInterval', async () => { await periodNext() })} disabled={!isIntervalPhase} title="Termina l'intervallo e passa al periodo successivo">{confirm['endInterval'] && Date.now() < confirm['endInterval'] ? 'Conferma termina intervallo' : 'Termina Intervallo'}</button>
           </div>
         </div>

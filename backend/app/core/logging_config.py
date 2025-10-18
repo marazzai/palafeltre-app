@@ -23,17 +23,22 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
         
-        # Add extra fields from record
-        if hasattr(record, "user_id"):
-            log_data["user_id"] = record.user_id
-        if hasattr(record, "request_id"):
-            log_data["request_id"] = record.request_id
-        if hasattr(record, "endpoint"):
-            log_data["endpoint"] = record.endpoint
-        if hasattr(record, "method"):
-            log_data["method"] = record.method
-        if hasattr(record, "duration_ms"):
-            log_data["duration_ms"] = record.duration_ms
+        # Add extra fields from record using getattr so static analyzers don't complain
+        user_id = getattr(record, "user_id", None)
+        if user_id is not None:
+            log_data["user_id"] = user_id
+        request_id = getattr(record, "request_id", None)
+        if request_id is not None:
+            log_data["request_id"] = request_id
+        endpoint = getattr(record, "endpoint", None)
+        if endpoint is not None:
+            log_data["endpoint"] = endpoint
+        method = getattr(record, "method", None)
+        if method is not None:
+            log_data["method"] = method
+        duration_ms = getattr(record, "duration_ms", None)
+        if duration_ms is not None:
+            log_data["duration_ms"] = duration_ms
         
         return json.dumps(log_data, ensure_ascii=False)
 

@@ -13,9 +13,21 @@ import asyncio
 import os
 from datetime import datetime, timezone
 from sqlalchemy import text
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+except Exception:  # pragma: no cover - dev/editor fallback when slowapi isn't installed
+    class Limiter:
+        def __init__(self, *args, **kwargs):
+            pass
+    def _rate_limit_exceeded_handler(request, exc):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+    def get_remote_address(request=None):
+        return None
+    class RateLimitExceeded(Exception):
+        pass
 import logging
 
 # Setup logging
