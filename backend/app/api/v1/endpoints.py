@@ -1264,7 +1264,30 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
         ws.disconnect()
         return {'scenes': scenes}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
+        # Log full exception with traceback on the server for diagnostics
+        logger.exception("OBS scan/connection failed")
+        # If we see the specific KeyError for 'status', provide actionable hint about protocol mismatch
+        hint = None
+        try:
+            if isinstance(e, KeyError) and (str(e) == "'status'" or (e.args and e.args[0] == 'status')):
+                hint = ("It looks like the OBS WebSocket server speaks the v5 protocol, while the server-side Python client "
+                        "expects the v4 protocol (obs-websocket 4.x). Either install OBS WebSocket 4.x on the OBS host or "
+                        "upgrade the backend to a client compatible with OBS WebSocket v5.")
+            elif "status" in str(e) and 'KeyError' in type(e).__name__:
+                hint = ("Connection appears to fail due to a missing 'status' field in the response — this usually means a "
+                        "protocol mismatch between OBS WebSocket and the Python client library.")
+        except Exception:
+            hint = None
+
+        # Return a concise, non-sensitive message to the client including exception type and message
+        try:
+            detail = f"{type(e).__name__}: {str(e)}"
+        except Exception:
+            detail = "Connection failed"
+
+        if hint:
+            raise HTTPException(status_code=500, detail=f"Connection failed: {detail}. {hint}")
+        raise HTTPException(status_code=500, detail=f'Connection failed: {detail}')
 
 
 @router.get('/admin/obs/info')
