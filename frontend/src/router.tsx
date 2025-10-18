@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from './ui/AppLayout'
 import AdminPanel from './ui/AdminPanel'
 import AdminUsers from './ui/admin/Users'
+import AdminObs from './ui/admin/Obs'
 import { Dashboard } from './ui/Dashboard'
 import { SkatingControl } from './ui/SkatingControl'
 import { SkatingPlayer } from './ui/SkatingPlayer'
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
           { path: 'skate-rental', element: <SkateRentalPage /> },
           { path: 'admin', element: <AdminPanel /> },
           { path: 'admin/users', element: <AdminUsers /> },
+          { path: 'admin/obs', element: <AdminObs /> },
         ],
       },
     ],

@@ -1278,7 +1278,45 @@ def admin_obs_info(db: Session = Depends(get_db), current: User = Depends(requir
     host = _get_setting_value(db, 'obs.host', '') or ''
     port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
     scene = _get_setting_value(db, 'obs.scene', '') or ''
-    return {'has_library': has_lib, 'host': host, 'port': port, 'scene': scene}
+    activate = _get_setting_value(db, 'obs.activate_scene', '') or ''
+    deactivate = _get_setting_value(db, 'obs.deactivate_scene', '') or ''
+    return {'has_library': has_lib, 'host': host, 'port': port, 'scene': scene, 'activate_scene': activate, 'deactivate_scene': deactivate}
+
+
+# Role -> pages mapping endpoints. Store per-role allowed pages as JSON in AppSetting under key 'role.{role_id}.pages'
+class RolePagesIn(BaseModel):
+    pages: list[str]
+
+
+@router.get('/admin/roles/{role_id}/pages')
+def get_role_pages(role_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    key = f'role.{role_id}.pages'
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not row or not getattr(row, 'value', None):
+        return {'pages': []}
+    try:
+        import json
+        val = json.loads(row.value)
+        if isinstance(val, list):
+            return {'pages': val}
+    except Exception:
+        pass
+    return {'pages': []}
+
+
+@router.put('/admin/roles/{role_id}/pages')
+def set_role_pages(role_id: int, data: RolePagesIn, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    import json
+    key = f'role.{role_id}.pages'
+    value = json.dumps(list(data.pages or []))
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if row:
+        row.value = value
+    else:
+        db.add(AppSetting(key=key, value=value))
+    db.add(AuditLog(user_id=current.id, action='role.pages.update', details=f'role:{role_id}'))
+    db.commit()
+    return {'ok': True}
 
 class AuditOut(BaseModel):
     id: int

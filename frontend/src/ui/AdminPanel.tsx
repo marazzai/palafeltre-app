@@ -433,7 +433,8 @@ function ModulesSection(){
         <label>OBS Password<input type="password" value={settings['obs.password']||''} onChange={e=> set('obs.password', e.target.value)} /></label>
         <label>Scena OBS<input value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)} /></label>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-          <button className="btn btn-outline" onClick={scanObs}>Scansiona Scene OBS</button>
+        <button className="btn btn-outline" onClick={scanObs}>Scansiona Scene OBS</button>
+        <button className="btn btn-outline" onClick={() => navigate('/admin/obs')}>Apri pagina OBS</button>
           <select value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)}>
             <option value="">-- seleziona scena --</option>
             {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
