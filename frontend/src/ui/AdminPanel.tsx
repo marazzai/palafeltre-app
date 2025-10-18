@@ -428,27 +428,39 @@ function ModulesSection(){
   }
       useEffect(()=>{ loadLogo('home'); loadLogo('away'); return ()=>{ try{ if(logoHomeUrl) URL.revokeObjectURL(logoHomeUrl); if(logoAwayUrl) URL.revokeObjectURL(logoAwayUrl) }catch{} } },[])
 
-      // OBS scan
+      // OBS scan / connection UI
       const [obsScenes, setObsScenes] = useState<string[]>([])
-          const [obsInfo, setObsInfo] = useState<{has_library:boolean; host:string; port:number; scene:string}|null>(null)
-          const scanObs = async ()=>{
-            try{
-              if(obsInfo && !obsInfo.has_library){ alert('OBS client library not installed on server'); return }
-              const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
-              if(!r.ok){ const txt = await r.text(); alert('Scan failed: ' + txt); return }
-              const d = await r.json()
-              setObsScenes(d.scenes || [])
-            }catch(e){ alert('Scan error') }
-          }
-          const loadObsInfo = async ()=>{
-            try{
-              const r = await fetch('/api/v1/admin/obs/info', { headers: { Authorization: `Bearer ${token()}` } })
-              if(!r.ok) return
-              const d = await r.json()
-              setObsInfo(d)
-            }catch(e){}
-          }
-          useEffect(()=>{ loadObsInfo() },[])
+      const [obsInfo, setObsInfo] = useState<{has_library:boolean; host:string; port:number; scene:string; activate_scene?:string; deactivate_scene?:string}|null>(null)
+      const [obsConnecting, setObsConnecting] = useState(false)
+      const [obsConnected, setObsConnected] = useState(false)
+      const [obsStatus, setObsStatus] = useState<string|null>(null)
+
+      const scanObs = async ()=>{
+        setObsConnecting(true); setObsStatus('Connessione in corso...')
+        try{
+          if(obsInfo && !obsInfo.has_library){ setObsStatus('Libreria OBS non installata sul server'); setObsConnecting(false); return }
+          const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
+          if(!r.ok){ const txt = await r.text(); setObsStatus('Scan failed: '+(txt||r.status)); setObsConnected(false); return }
+          const d = await r.json()
+          setObsScenes(d.scenes || [])
+          setObsStatus(`Trovate ${(d.scenes||[]).length} scene`)
+          setObsConnected(true)
+        }catch(e){ setObsStatus('Scan error'); setObsConnected(false) }
+        finally{ setObsConnecting(false); setTimeout(()=> setObsStatus(null), 3000) }
+      }
+
+      const loadObsInfo = async ()=>{
+        try{
+          const r = await fetch('/api/v1/admin/obs/info', { headers: { Authorization: `Bearer ${token()}` } })
+          if(!r.ok) return
+          const d = await r.json()
+          setObsInfo(d)
+          // prefill scenes list if info contains them
+          if(d.activate_scene) set('obs.activate_scene', d.activate_scene)
+          if(d.deactivate_scene) set('obs.deactivate_scene', d.deactivate_scene)
+        }catch(e){}
+      }
+      useEffect(()=>{ loadObsInfo() },[])
 
   // Ticket categories
   type Cat = { id:number; name:string; color?:string; sort_order:number }
@@ -487,13 +499,36 @@ function ModulesSection(){
         <label>OBS Password<input type="password" value={settings['obs.password']||''} onChange={e=> set('obs.password', e.target.value)} /></label>
         <label>Scena OBS<input value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)} /></label>
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-        <button className="btn btn-outline" onClick={scanObs}>Scansiona Scene OBS</button>
-        <button className="btn btn-outline" onClick={() => navigate('/admin/obs')}>Apri pagina OBS</button>
+          <button className="btn btn-outline" onClick={async ()=>{ await loadObsInfo(); await scanObs() }} disabled={obsConnecting}>{obsConnecting? 'Connettendo…':'Connetti e Scansiona'}</button>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/obs')}>Apri pagina OBS</button>
           <select value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)}>
             <option value="">-- seleziona scena --</option>
             {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        <div style={{display:'flex', gap:8, alignItems:'center', marginTop:8}}>
+          <label style={{display:'flex', flexDirection:'column'}}>
+            Scena per "Mostra Tabellone"
+            <input value={settings['obs.activate_scene']||''} onChange={e=> set('obs.activate_scene', e.target.value)} />
+          </label>
+          <label style={{display:'flex', flexDirection:'column'}}>
+            Scena per "Disattiva Tabellone"
+            <input value={settings['obs.deactivate_scene']||''} onChange={e=> set('obs.deactivate_scene', e.target.value)} />
+          </label>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <button className="btn" onClick={async ()=>{
+              // save settings including activate/deactivate scenes
+              const keys = ['obs.host','obs.port','obs.password','obs.scene','obs.activate_scene','obs.deactivate_scene']
+              const items = keys.filter(k=> settings[k]!==undefined).map(k=> ({ key:k, value: String(settings[k] ?? '') }))
+              const r = await fetch('/api/v1/admin/settings', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(items) })
+              if(r.ok) setObsStatus('Impostazioni OBS salvate')
+              else setObsStatus('Errore salvataggio OBS')
+              setTimeout(()=> setObsStatus(null), 2000)
+            }}>Salva Mappe Scene</button>
+            <button className="btn btn-outline" onClick={()=> scanObs()} disabled={obsConnecting}>Scansiona Scene</button>
+          </div>
+        </div>
+        {obsStatus && <div style={{marginTop:8}}><small className="text-muted">{obsStatus}</small></div>}
         <label>Minuti anticipo jingle<input value={settings['skating.jingle_lead_minutes']||''} onChange={e=> set('skating.jingle_lead_minutes', e.target.value)} /></label>
       </div></div>
       <h4 style={{marginTop:12}}>File Audio</h4>
