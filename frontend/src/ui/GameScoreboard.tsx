@@ -184,11 +184,11 @@ export function GameScoreboard(){
         .center { display:flex; align-items:center; justify-content:center; flex-direction:column; background: radial-gradient(1200px 600px at 50% -20%, rgba(255,255,255,0.1), rgba(0,0,0,0.2)); border: 2px solid rgba(255,255,255,0.15); border-radius: 12px; }
         .timer { font-family: 'Orbitron', 'Oswald', sans-serif; font-weight: 800; font-size: clamp(54px, 7.6vw, 160px); letter-spacing: 2px; line-height: 1; }
         .period { margin-top: 0.6vh; font-family: 'Oswald', sans-serif; font-weight: 600; font-size: clamp(16px, 2vw, 36px); letter-spacing: 2px; opacity: 0.9; }
-        .sb-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2vw; }
-        .pen-box { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8vw; background: rgba(255,255,255,0.04); border: 2px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 0.8vw; }
-        .pen-card { display:flex; align-items:center; justify-content:space-between; gap: 0.6vw; padding: 0.6vw 0.8vw; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; }
-        .pen-number { font-family: 'Oswald', sans-serif; font-weight:700; font-size: clamp(16px, 2.2vw, 36px); }
-        .pen-time { font-family: 'Orbitron', sans-serif; font-weight:700; font-size: clamp(16px, 2.4vw, 40px); }
+  .sb-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2vw; }
+  .pen-box { display: grid; grid-template-rows: repeat(2, auto); gap: 0.8vw; background: rgba(255,255,255,0.04); border: 2px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 0.8vw; }
+  .pen-card { display:grid; grid-template-columns: 1fr auto; align-items:center; gap: 0.6vw; padding: 0.8vw 1vw; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; min-height: clamp(40px, 6vh, 90px); }
+  .pen-number { font-family: 'Oswald', sans-serif; font-weight:800; font-size: clamp(18px, 2.6vw, 42px); justify-self: start; }
+  .pen-time { font-family: 'Orbitron', sans-serif; font-weight:800; font-size: clamp(18px, 2.8vw, 46px); justify-self: end; }
         .badge { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 10px; background: #f97316; color: #000; border-radius: 999px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
         .ws { position: fixed; bottom: 10px; right: 12px; font-size: 12px; opacity: .6; font-family: 'Oswald', sans-serif; }
         .unlock { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.6); }
@@ -242,7 +242,10 @@ export function GameScoreboard(){
                     <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
                   </>
                 ) : (
-                  <div className="pen-time">—</div>
+                  <>
+                    <div className="pen-number" style={{opacity:.7}}>—</div>
+                    <div className="pen-time">—</div>
+                  </>
                 )}
               </div>
             ))}
@@ -256,7 +259,10 @@ export function GameScoreboard(){
                     <div className="pen-time">{Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</div>
                   </>
                 ) : (
-                  <div className="pen-time">—</div>
+                  <>
+                    <div className="pen-number" style={{opacity:.7}}>—</div>
+                    <div className="pen-time">—</div>
+                  </>
                 )}
               </div>
             ))}

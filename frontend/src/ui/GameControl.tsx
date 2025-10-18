@@ -17,6 +17,7 @@ type GameState = {
   timerRemaining: number
   periodDuration: number
   intervalDuration?: number
+  inInterval?: boolean
   timeoutRemaining: number
   sirenOn: boolean
   sirenEveryMinute?: boolean
@@ -56,6 +57,7 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
     timerRemaining: Number(raw.timerRemaining ?? (20*60)),
     periodDuration: Number(raw.periodDuration ?? (20*60)),
     intervalDuration: Number(raw.intervalDuration ?? (15*60)),
+  inInterval: Boolean((raw as any).inInterval ?? false),
     timeoutRemaining: Math.max(0, Number(raw.timeoutRemaining ?? 0)),
     sirenOn: Boolean(raw.sirenOn),
     sirenEveryMinute: Boolean(raw.sirenEveryMinute ?? false),
@@ -71,6 +73,7 @@ export function GameControl(){
   const [penModal, setPenModal] = useState<{ team:'home'|'away'; open:boolean }>({ team:'home', open:false })
   const [pen, setPen] = useState<{ number:string; minutes:number }>({ number:'', minutes:2 })
   const [log, setLog] = useState<Array<{ ts:number; text:string }>>([])
+  const [confirm, setConfirm] = useState<Record<string, number>>({})
 
   const token = sessionStorage.getItem('token') || ''
   useEffect(() => {
@@ -177,9 +180,34 @@ export function GameControl(){
 
   function formatTime(total: number){ const m = Math.floor(total/60).toString().padStart(2,'0'); const s = (total%60).toString().padStart(2,'0'); return `${m}:${s}` }
 
+  function confirmOrRun(key: string, action: () => void){
+    const now = Date.now()
+    const until = confirm[key]
+    if(until && now < until){
+      // confirmed
+      const next = { ...confirm }
+      delete next[key]
+      setConfirm(next)
+      action()
+    } else {
+      setConfirm(prev => ({ ...prev, [key]: now + 5000 }))
+      // auto clear after timeout
+      setTimeout(() => setConfirm(prev => { const p = { ...prev }; if(p[key] && Date.now() >= p[key]) delete p[key]; return p }), 5200)
+    }
+  }
+
+  const isIntervalPhase = Boolean(state.inInterval)
+
   return (
     <div className="container">
-      <h2 style={{ marginBottom: 12 }}>Tabellone — Controllo</h2>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+        <h2 style={{ marginBottom: 12 }}>Tabellone</h2>
+        <button
+          className={`btn ${state.obsVisible ? '' : 'btn-outline'}`}
+          onClick={toggleObs}
+          title={state.obsVisible ? 'Nasconde la grafica del tabellone nelle scene OBS' : 'Mostra la grafica del tabellone nelle scene OBS'}
+        >{state.obsVisible ? 'Nascondi tabellone' : 'Mostra tabellone'}</button>
+      </div>
 
       {/* Riepilogo in alto */}
       <div className="card" style={{marginBottom:16}}>
@@ -203,20 +231,37 @@ export function GameControl(){
       {/* Configurazione */}
       <div className="card">
         <div className="card-header"><strong>Configurazione</strong></div>
-        <div className="card-body" style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:12, alignItems:'center'}}>
-          <input className="input" placeholder="Casa" value={setup.home} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, home: e.target.value })} />
-          <input className="input" placeholder="Ospiti" value={setup.away} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, away: e.target.value })} />
-          <input className="input" type="color" aria-label="Colore Casa" value={setup.colorHome} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorHome: e.target.value })} />
-          <input className="input" type="color" aria-label="Colore Ospiti" value={setup.colorAway} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorAway: e.target.value })} />
-          <input className="input" placeholder="Durata periodo (MM:SS)" value={setup.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, duration: e.target.value })} />
-          <input className="input" placeholder="Intervallo (MM:SS)" value={setup.interval} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, interval: e.target.value })} />
+        <div className="card-body" style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12, alignItems:'start'}}>
+          <div className="field">
+            <label className="label">Nome squadra Casa</label>
+            <input className="input" placeholder="Casa" value={setup.home} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, home: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="label">Nome squadra Ospiti</label>
+            <input className="input" placeholder="Ospiti" value={setup.away} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, away: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="label">Colore Casa</label>
+            <input className="input" type="color" aria-label="Colore Casa" value={setup.colorHome} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorHome: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="label">Colore Ospiti</label>
+            <input className="input" type="color" aria-label="Colore Ospiti" value={setup.colorAway} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, colorAway: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="label">Durata periodo (MM:SS)</label>
+            <input className="input" placeholder="MM:SS" value={setup.duration} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, duration: e.target.value })} />
+          </div>
+          <div className="field">
+            <label className="label">Intervallo (MM:SS)</label>
+            <input className="input" placeholder="MM:SS" value={setup.interval} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSetup({ ...setup, interval: e.target.value })} />
+          </div>
           <label style={{display:'flex', alignItems:'center', gap:8}}>
             <input type="checkbox" checked={setup.sirenEveryMinute} onChange={(e)=> setSetup({ ...setup, sirenEveryMinute: e.target.checked })} />
             Sirena ogni minuto
           </label>
           <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
-            <button className="btn" style={{minWidth:180}} onClick={startGame} title="Imposta nomi squadre, colori e durate">Applica configurazione</button>
-            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:180}} onClick={toggleObs} title="Mostra/Nascondi grafica su OBS">{state.obsVisible ? 'OBS: Visibile' : 'OBS: Nascosta'}</button>
+            <button className="btn" style={{minWidth:200}} onClick={() => confirmOrRun('applyConfig', startGame)} title="Imposta nomi squadre, colori e durate">{confirm['applyConfig'] && Date.now() < confirm['applyConfig'] ? 'Conferma applica' : 'Applica configurazione'}</button>
           </div>
         </div>
       </div>
@@ -251,8 +296,8 @@ export function GameControl(){
           </div>
           <div className="text-muted" style={{fontSize:12}}>Periodo attuale: {state.period}</div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8}}>
-            <button className="btn btn-outline" onClick={timerReset} title="Reimposta il tempo al valore iniziale del periodo">Reset periodo</button>
-            <button className="btn btn-outline" onClick={periodNext} title="Passa al periodo successivo e reimposta il tempo">Periodo successivo</button>
+            <button className="btn btn-outline" onClick={() => confirmOrRun('resetPeriod', timerReset)} title="Reimposta il tempo al valore iniziale del periodo">{confirm['resetPeriod'] && Date.now() < confirm['resetPeriod'] ? 'Conferma reset' : 'Reset periodo'}</button>
+            <button className="btn btn-outline" onClick={() => confirmOrRun('nextPeriod', periodNext)} title="Passa al periodo successivo e reimposta il tempo">{confirm['nextPeriod'] && Date.now() < confirm['nextPeriod'] ? 'Conferma periodo+' : 'Periodo successivo'}</button>
           </div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))', gap:8, alignItems:'end'}}>
             <div className="field">
@@ -287,7 +332,8 @@ export function GameControl(){
           <div className="card-header"><strong>Intervallo</strong></div>
           <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
             <div className="text-muted" style={{fontSize:12}}>Durata configurata: {formatTime(state.intervalDuration || 0)}</div>
-            <button className="btn" onClick={intervalStart} title="Imposta il timer di intervallo e avvialo">Avvia Intervallo</button>
+            <button className="btn" onClick={intervalStart} disabled={!state.inInterval || state.timerRunning} title="Disponibile solo quando il periodo termina e l'intervallo è pronto">Avvia Intervallo</button>
+            <button className="btn btn-outline" onClick={() => confirmOrRun('endInterval', async () => { await periodNext() })} disabled={!isIntervalPhase} title="Termina l'intervallo e passa al periodo successivo">{confirm['endInterval'] && Date.now() < confirm['endInterval'] ? 'Conferma termina intervallo' : 'Termina Intervallo'}</button>
           </div>
         </div>
       </div>
@@ -342,6 +388,7 @@ export function GameControl(){
               <input className="input" placeholder="Numero giocatore" value={pen.number} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPen({ ...pen, number: e.target.value })} />
               <select className="input" value={pen.minutes} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPen({ ...pen, minutes: Number(e.target.value) })}>
                 <option value={2}>2 minuti</option>
+                <option value={4}>2+2 (4 minuti)</option>
                 <option value={5}>5 minuti</option>
               </select>
             </div>
@@ -352,6 +399,22 @@ export function GameControl(){
           </div>
         </div>
       )}
+
+      {/* Guida rapida */}
+      <div className="card" style={{marginTop:16}}>
+        <div className="card-header"><strong>Guida rapida</strong></div>
+        <div className="card-body">
+          <ul>
+            <li>Start/Stop controlla il cronometro principale del periodo.</li>
+            <li>“Reset periodo” e “Periodo successivo” richiedono doppio clic per conferma entro 5s.</li>
+            <li>Imposta tempo: scrivi MM:SS e premi Invio o “Imposta”.</li>
+            <li>Alla fine del periodo, “Avvia Intervallo” si abilita automaticamente.</li>
+            <li>“Termina Intervallo” richiede doppio clic e passa al periodo successivo.</li>
+            <li>La sirena suona allo scadere del periodo e ogni minuto se attivata.</li>
+            <li>Il tabellone OBS può essere mostrato/nascosto dal pulsante in alto.</li>
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }
