@@ -54,6 +54,7 @@ export function GameScoreboard(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
   const prevTimeRef = useRef<number>(state.timerRemaining)
+  const sirenUrl = React.useMemo(() => `/api/v1/scoreboard/siren?v=${Date.now()}`,[ ])
   const [audioUnlocked, setAudioUnlocked] = useState<boolean>(false)
   const [viewport, setViewport] = useState<{ w?: number; h?: number; mt: number; mr: number; mb: number; ml: number }>(() => {
     const params = new URLSearchParams(window.location.search)
@@ -109,7 +110,7 @@ export function GameScoreboard(){
   const audioRef = useRef<HTMLAudioElement | null>(null)
   useEffect(() => {
     // Preload siren audio if available
-    const audio = new Audio('/api/v1/scoreboard/siren')
+    const audio = new Audio(sirenUrl)
     audio.preload = 'auto'
     audioRef.current = audio
     // Try silent autoplay to unlock if policy allows
@@ -119,15 +120,31 @@ export function GameScoreboard(){
     }).catch(() => {
       setAudioUnlocked(false)
     })
-  }, [])
+  }, [sirenUrl])
 
-  const playSiren = () => {
-    // Try audio file first
+  const playSiren = async () => {
+    // Prefer audio file; if it plays successfully, do not run the synth fallback.
     const a = audioRef.current
-    if(a){ a.currentTime = 0; a.volume = 1.0; a.play().catch(() => {}) }
-    // Fallback synth
+    if (a) {
+      try {
+        a.currentTime = 0
+        a.volume = 1.0
+        // await the play promise, if it resolves we stop here
+        await a.play()
+        return
+      } catch (e) {
+        // If play() fails (autoplay/cors/file error), fall through to synth fallback
+        try {
+          a.pause()
+          a.currentTime = 0
+        } catch {}
+      }
+    }
+
+    // Fallback synth only when audio file isn't available or failed to play
     try{
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext
+      const ctx = new Ctx()
       const osc1 = ctx.createOscillator(); const osc2 = ctx.createOscillator(); const gain = ctx.createGain()
       osc1.type = 'square'; osc2.type = 'sawtooth'; osc1.frequency.value = 650; osc2.frequency.value = 760
       gain.gain.value = 0.0001; osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination)
