@@ -1318,6 +1318,46 @@ def set_role_pages(role_id: int, data: RolePagesIn, db: Session = Depends(get_db
     db.commit()
     return {'ok': True}
 
+
+# Return merged pages allowed for the current user's roles
+@router.get('/me/role-pages')
+def me_role_pages(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    pages: Set[str] = set()
+    for r in current.roles:
+        # try to read role.{id}.pages
+        key = f'role.{r.id}.pages'
+        row = db.query(AppSetting).filter(AppSetting.key == key).first()
+        if row and getattr(row, 'value', None):
+            try:
+                import json
+                val = json.loads(row.value)
+                if isinstance(val, list):
+                    for p in val:
+                        pages.add(p)
+            except Exception:
+                continue
+    return {'pages': sorted(list(pages))}
+
+
+@router.post('/admin/obs/trigger')
+def admin_obs_trigger(data: dict, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    """Trigger an OBS scene change broadcast. Expected body: { action: 'activate'|'deactivate', scene: 'SceneName' }
+    This will broadcast on the 'control' websocket room the message { type: 'obsScene', payload: { scene: '<name>' } }"""
+    action = data.get('action')
+    scene = data.get('scene')
+    if action not in ('activate','deactivate'):
+        raise HTTPException(status_code=400, detail='Invalid action')
+    if not scene:
+        raise HTTPException(status_code=400, detail='Missing scene')
+    # Broadcast
+    try:
+        asyncio.create_task(ws_manager.broadcast('control', { 'type': 'obsScene', 'payload': { 'scene': scene, 'action': action } }))
+    except Exception:
+        raise HTTPException(status_code=500, detail='Broadcast failed')
+    db.add(AuditLog(user_id=current.id, action='obs.trigger', details=f'{action}:{scene}'))
+    db.commit()
+    return {'ok': True}
+
 class AuditOut(BaseModel):
     id: int
     timestamp: datetime
