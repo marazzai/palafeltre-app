@@ -105,7 +105,19 @@ export function GameScoreboard(){
   }, [wsRef])
 
   // Simple siren using WebAudio API (short dual-oscillator sweep)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => {
+    // Preload siren audio if available
+    const audio = new Audio('/api/v1/scoreboard/siren')
+    audio.preload = 'auto'
+    audioRef.current = audio
+  }, [])
+
   const playSiren = () => {
+    // Try audio file first
+    const a = audioRef.current
+    if(a){ a.currentTime = 0; a.volume = 1.0; a.play().catch(() => {}) }
+    // Fallback synth
     try{
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
       const osc1 = ctx.createOscillator(); const osc2 = ctx.createOscillator(); const gain = ctx.createGain()

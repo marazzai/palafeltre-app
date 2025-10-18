@@ -1675,6 +1675,37 @@ def scoreboard_logo_get(side: str, db: Session = Depends(get_db), _: User = Depe
     name = os.path.basename(row.value)
     return FileResponse(row.value, media_type=mt, filename=name)
 
+# Admin: Scoreboard siren audio upload and public fetch
+@router.post('/admin/scoreboard/siren')
+def scoreboard_siren_upload(file: UploadFile = File(...), db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    base = os.path.join(settings.storage_path, 'scoreboard')
+    os.makedirs(base, exist_ok=True)
+    ext = os.path.splitext(file.filename or '')[1].lower() or '.mp3'
+    # Basic whitelist
+    if ext not in ('.mp3', '.wav', '.ogg'):
+        ext = '.mp3'
+    name = f'siren{ext}'
+    dest = os.path.join(base, name)
+    with open(dest, 'wb') as fh:
+        shutil.copyfileobj(file.file, fh)
+    key = 'scoreboard.siren_path'
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if row: row.value = dest
+    else: db.add(AppSetting(key=key, value=dest))
+    db.add(AuditLog(user_id=current.id, action='scoreboard.siren.upload', details=name))
+    db.commit(); return {"ok": True, "path": dest}
+
+@router.get('/scoreboard/siren')
+def scoreboard_siren_get(db: Session = Depends(get_db)):
+    key = 'scoreboard.siren_path'
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not row or not row.value or not os.path.exists(row.value):
+        raise HTTPException(status_code=404, detail='Siren non trovata')
+    ext = os.path.splitext(row.value)[1].lower()
+    mt = 'audio/mpeg' if ext == '.mp3' else 'audio/wav' if ext == '.wav' else 'audio/ogg' if ext == '.ogg' else 'application/octet-stream'
+    name = os.path.basename(row.value)
+    return FileResponse(row.value, media_type=mt, filename=name)
+
 # Admin: DALI mapping settings (JSON)
 @router.get('/admin/dali/mapping')
 def dali_mapping_get(db: Session = Depends(get_db), _: User = Depends(require_admin)):
