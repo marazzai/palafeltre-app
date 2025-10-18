@@ -162,7 +162,9 @@ export function GameControl(){
   async function timerStart(){ try{ await post('/api/v1/game/timer/start'); appendLog('Cronometro avviato') }catch(e){ console.error(e) } }
   async function timerStop(){ try{ await post('/api/v1/game/timer/stop'); appendLog('Cronometro fermato') }catch(e){ console.error(e) } }
   async function timerReset(){ try{ await post('/api/v1/game/timer/reset'); appendLog('Cronometro resettato') }catch(e){ console.error(e) } }
+  async function timerSet(seconds:number, running?: boolean){ try{ await post('/api/v1/game/timer/set', { seconds, running }); appendLog(`Tempo impostato a ${formatTime(seconds)}`) }catch(e){ console.error(e) } }
   async function periodNext(){ try{ await post('/api/v1/game/period/next'); appendLog('Periodo successivo') }catch(e){ console.error(e) } }
+  async function intervalStart(){ try{ await post('/api/v1/game/interval/start'); appendLog('Intervallo avviato') }catch(e){ console.error(e) } }
 
   async function addPenalty(){
     try{
@@ -213,8 +215,8 @@ export function GameControl(){
             Sirena ogni minuto
           </label>
           <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
-            <button className="btn" style={{minWidth:180}} onClick={startGame}>Applica configurazione</button>
-            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:180}} onClick={toggleObs}>{state.obsVisible ? 'Disattiva scena' : 'Attiva scena'}</button>
+            <button className="btn" style={{minWidth:180}} onClick={startGame} title="Imposta nomi squadre, colori e durate">Applica configurazione</button>
+            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:180}} onClick={toggleObs} title="Mostra/Nascondi grafica su OBS">{state.obsVisible ? 'OBS: Visibile' : 'OBS: Nascosta'}</button>
           </div>
         </div>
       </div>
@@ -242,13 +244,33 @@ export function GameControl(){
 
       <div className="card" style={{marginTop:16}}>
         <div className="card-header"><strong>Cronometro</strong></div>
-        <div className="card-body" style={{display:'flex', alignItems:'center', gap:12}}>
-          <div style={{fontSize:42, fontWeight:700, width:140, textAlign:'center'}}>{formatTime(state.timerRemaining)}</div>
-          <button className="btn" onClick={timerStart}>Start</button>
-          <button className="btn btn-outline" onClick={timerStop}>Stop</button>
-          <button className="btn btn-outline" onClick={timerReset}>Reset</button>
-          <div className="text-muted" style={{fontSize:12}}>Periodo: {state.period}</div>
-          <button className="btn btn-outline" onClick={periodNext}>Periodo Successivo</button>
+        <div className="card-body" style={{display:'grid', gridTemplateColumns:'1fr', gap:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
+            <div style={{fontSize:48, fontWeight:800, minWidth:160, textAlign:'center'}} aria-label="Tempo di gioco">{formatTime(state.timerRemaining)}</div>
+            <button className={`btn ${state.timerRunning? '' : 'btn-outline'}`} style={{minWidth:220, padding:'18px 24px', fontSize:18}} onClick={() => state.timerRunning ? timerStop() : timerStart()} title="Avvia/Ferma il tempo di gioco">{state.timerRunning ? 'Stop' : 'Start'}</button>
+          </div>
+          <div className="text-muted" style={{fontSize:12}}>Periodo attuale: {state.period}</div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8}}>
+            <button className="btn btn-outline" onClick={timerReset} title="Reimposta il tempo al valore iniziale del periodo">Reset periodo</button>
+            <button className="btn btn-outline" onClick={periodNext} title="Passa al periodo successivo e reimposta il tempo">Periodo successivo</button>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))', gap:8, alignItems:'end'}}>
+            <div className="field">
+              <label className="label">Imposta tempo (MM:SS)</label>
+              <input className="input" placeholder="MM:SS" aria-label="Tempo manuale" title="Imposta manualmente il tempo di gioco" onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if(e.key === 'Enter'){
+                  const t = (e.target as HTMLInputElement).value.trim(); const [m,s] = t.split(':'); const val = Math.max(0, (parseInt(m||'0')||0)*60 + (parseInt(s||'0')||0)); timerSet(val)
+                }
+              }} />
+            </div>
+            <button className="btn" onClick={() => {
+              const el = (document.querySelector('input[aria-label="Tempo manuale"]') as HTMLInputElement | null)
+              const t = el?.value.trim() || ''
+              const [m,s] = t.split(':')
+              const val = Math.max(0, (parseInt(m||'0')||0)*60 + (parseInt(s||'0')||0))
+              timerSet(val)
+            }} title="Applica il tempo manuale">Imposta</button>
+          </div>
         </div>
       </div>
 
@@ -256,16 +278,16 @@ export function GameControl(){
         <div className="card">
           <div className="card-header"><strong>Timeout</strong></div>
           <div className="card-body" style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
-            <div style={{fontSize:28, fontWeight:700, minWidth:120, textAlign:'center'}}>{state.timeoutRemaining > 0 ? `${state.timeoutRemaining}s` : '—'}</div>
-            <button className="btn" style={{minWidth:160}} onClick={startTimeout} disabled={state.timeoutRemaining > 0}>Avvia 30s</button>
-            <button className="btn btn-outline" style={{minWidth:160}} onClick={stopTimeout} disabled={state.timeoutRemaining === 0}>Termina</button>
+            <div style={{fontSize:32, fontWeight:800, minWidth:140, textAlign:'center'}} title="Tempo di timeout">{state.timeoutRemaining > 0 ? `${state.timeoutRemaining}s` : '—'}</div>
+            <button className="btn" style={{minWidth:160}} onClick={startTimeout} disabled={state.timeoutRemaining > 0} title="Avvia timeout di 30 secondi">Avvia 30s</button>
+            <button className="btn btn-outline" style={{minWidth:160}} onClick={stopTimeout} disabled={state.timeoutRemaining === 0} title="Termina il timeout">Termina</button>
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><strong>Controlli Rapidi</strong></div>
-          <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-            <button className={`btn ${state.sirenOn ? '' : 'btn-outline'}`} style={{minWidth:160}} onClick={toggleSiren}>{state.sirenOn ? 'Sirena ON' : 'Sirena OFF'}</button>
-            <button className={`btn ${state.obsVisible ? '' : 'btn-outline'}`} style={{minWidth:160}} onClick={toggleObs}>{state.obsVisible ? 'OBS visibile' : 'OBS nascosto'}</button>
+          <div className="card-header"><strong>Intervallo</strong></div>
+          <div className="card-body" style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
+            <div className="text-muted" style={{fontSize:12}}>Durata configurata: {formatTime(state.intervalDuration || 0)}</div>
+            <button className="btn" onClick={intervalStart} title="Imposta il timer di intervallo e avvialo">Avvia Intervallo</button>
           </div>
         </div>
       </div>
@@ -274,12 +296,12 @@ export function GameControl(){
         <div className="card">
           <div className="card-header"><strong>Penalità — {state.homeName}</strong></div>
           <div className="card-body">
-            <button className="btn btn-outline" onClick={() => { setPenModal({ team:'home', open:true }); setPen({ number:'', minutes:2 }) }}>Aggiungi Penalità</button>
+            <button className="btn btn-outline" title="Aggiungi penalità alla squadra di casa" onClick={() => { setPenModal({ team:'home', open:true }); setPen({ number:'', minutes:2 }) }}>Aggiungi Penalità</button>
             <ul>
               {state.penalties.filter(p => p.team==='home').map(p => (
                 <li key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}>
                   <span>#{p.player_number} — {Math.floor(p.remaining/60)}:{String(p.remaining%60).padStart(2,'0')}</span>
-                  <button className="btn btn-outline" onClick={() => fetch(`/api/v1/game/penalties/${p.id}`, { method:'DELETE', headers: authHeader || undefined })}>Rimuovi</button>
+                  <button className="btn btn-outline" title="Rimuovi penalità" onClick={() => fetch(`/api/v1/game/penalties/${p.id}`, { method:'DELETE', headers: authHeader || undefined })}>Rimuovi</button>
                 </li>
               ))}
             </ul>
@@ -288,7 +310,7 @@ export function GameControl(){
         <div className="card">
           <div className="card-header"><strong>Penalità — {state.awayName}</strong></div>
           <div className="card-body">
-            <button className="btn btn-outline" onClick={() => { setPenModal({ team:'away', open:true }); setPen({ number:'', minutes:2 }) }}>Aggiungi Penalità</button>
+            <button className="btn btn-outline" title="Aggiungi penalità alla squadra ospite" onClick={() => { setPenModal({ team:'away', open:true }); setPen({ number:'', minutes:2 }) }}>Aggiungi Penalità</button>
             <ul>
               {state.penalties.filter(p => p.team==='away').map(p => (
                 <li key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}>

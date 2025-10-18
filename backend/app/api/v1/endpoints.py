@@ -1901,6 +1901,27 @@ async def game_timer_reset(_: User = Depends(require_permission('game.control'))
         await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
     return {"ok": True}
 
+class TimerSetRequest(BaseModel):
+    seconds: int
+    running: bool | None = None
+
+@router.post("/game/timer/set")
+async def game_timer_set(req: TimerSetRequest, _: User = Depends(require_permission('game.control'))):
+    async with game_lock:
+        game_state.timer_remaining = max(0, int(req.seconds))
+        if req.running is not None:
+            game_state.timer_running = bool(req.running)
+        await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+    return {"ok": True, "timerRemaining": game_state.timer_remaining, "timerRunning": game_state.timer_running}
+
+@router.post("/game/interval/start")
+async def game_interval_start(_: User = Depends(require_permission('game.control'))):
+    async with game_lock:
+        game_state.timer_running = True
+        game_state.timer_remaining = game_state.interval_duration_seconds
+        await ws_manager.broadcast('game', {"type": "state", "payload": _snapshot_state()})
+    return {"ok": True}
+
 @router.post("/game/period/next")
 async def game_period_next(_: User = Depends(require_permission('game.control'))):
     async with game_lock:
@@ -1940,6 +1961,7 @@ async def game_scheduler():
         await asyncio.sleep(1)
         changed = False
         just_pulsed = False
+        period_end_pulse = False
         removed_ids: List[int] = []
         async with game_lock:
             if game_state.timer_running and game_state.timer_remaining > 0:
@@ -1949,6 +1971,8 @@ async def game_scheduler():
                     game_state.timer_running = False
                     # end of period: auto set interval timer
                     game_state.timer_remaining = game_state.interval_duration_seconds
+                    # trigger siren at end of period
+                    period_end_pulse = True
                 changed = True
                 # siren pulse each minute if option enabled
                 if game_state.siren_every_minute and game_state.timer_remaining % 60 == 0:
@@ -1975,7 +1999,7 @@ async def game_scheduler():
             except Exception:
                 pass
         # trigger siren pulse event, outside lock
-        if just_pulsed:
+        if just_pulsed or period_end_pulse:
             try:
                 await ws_manager.broadcast('game', {"type": "sirenPulse", "payload": {"at": int(datetime.now(timezone.utc).timestamp())}})
             except Exception:

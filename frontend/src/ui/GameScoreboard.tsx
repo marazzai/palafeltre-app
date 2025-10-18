@@ -53,6 +53,7 @@ function normalizeState(raw: Partial<GameState> & { penalties?: any }): GameStat
 export function GameScoreboard(){
   const { status, wsRef } = useWs('game')
   const [state, setState] = useState<GameState>(normalizeState({}))
+  const prevTimeRef = useRef<number>(state.timerRemaining)
   const [viewport, setViewport] = useState<{ w?: number; h?: number; mt: number; mr: number; mb: number; ml: number }>(() => {
     const params = new URLSearchParams(window.location.search)
     const w = Number(params.get('w') || '')
@@ -103,6 +104,43 @@ export function GameScoreboard(){
     }
   }, [wsRef])
 
+  // Simple siren using WebAudio API (short dual-oscillator sweep)
+  const playSiren = () => {
+    try{
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const osc1 = ctx.createOscillator(); const osc2 = ctx.createOscillator(); const gain = ctx.createGain()
+      osc1.type = 'square'; osc2.type = 'sawtooth'; osc1.frequency.value = 650; osc2.frequency.value = 760
+      gain.gain.value = 0.0001; osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination)
+      const now = ctx.currentTime
+      gain.gain.exponentialRampToValueAtTime(0.4, now + 0.02)
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.5)
+      osc2.frequency.exponentialRampToValueAtTime(990, now + 0.5)
+      osc1.start(); osc2.start()
+      setTimeout(() => { try { osc1.stop(); osc2.stop(); ctx.close() } catch{} }, 700)
+    }catch{}
+  }
+
+  // React to sirenPulse messages and to timer hitting 0
+  useEffect(() => {
+    const ws = wsRef.current
+    if(!ws) return
+    const prevOnMsg = ws.onmessage
+    ws.onmessage = (ev) => {
+      try{
+        const msg = JSON.parse(ev.data)
+        if(msg.type === 'sirenPulse') { playSiren() }
+        if(msg.type === 'state' && msg.payload) { setState(normalizeState(msg.payload)) }
+      }catch{}
+    }
+    return () => { if(ws) ws.onmessage = prevOnMsg as any }
+  }, [wsRef])
+
+  useEffect(() => {
+    const prev = prevTimeRef.current
+    if(prev > 0 && state.timerRemaining === 0){ playSiren() }
+    prevTimeRef.current = state.timerRemaining
+  }, [state.timerRemaining])
+
   function formatTime(total: number){ const m = Math.floor(total/60).toString().padStart(2,'0'); const s = (total%60).toString().padStart(2,'0'); return `${m}:${s}` }
 
   // Helpers
@@ -147,10 +185,7 @@ export function GameScoreboard(){
             <div className="timer">{formatTime(state.timerRemaining)}</div>
             <div className="period">PER {state.period}</div>
             {state.timeoutRemaining > 0 && (
-              <div style={{marginTop: '0.8vh', fontFamily: 'Oswald, sans-serif', fontWeight:700, color:'#f97316'}}>TIMEOUT · {state.timeoutRemaining}s</div>
-            )}
-            {state.sirenOn && (
-              <div style={{marginTop: '0.4vh', fontFamily: 'Oswald, sans-serif', fontWeight:600, color:'#22c55e'}}>SIRENA ATTIVA</div>
+              <div style={{marginTop: '0.8vh', fontFamily: 'Oswald, sans-serif', fontWeight:800, color:'#f97316', fontSize: 'clamp(18px, 3.2vw, 48px)'}}>TIMEOUT · {state.timeoutRemaining}s</div>
             )}
           </div>
           <div className="team" style={{borderColor: 'rgba(255,255,255,0.15)'}}>
