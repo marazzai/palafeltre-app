@@ -13,7 +13,7 @@ from ...models.documents import Folder, Document, DocumentVersion
 from ...models.scheduling import Shift, AvailabilityBlock, ShiftSwapRequest
 from ...models.skates import SkateInventory, SkateRental
 from fastapi import UploadFile, File, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from typing import Dict, Set, List, Optional
 from datetime import datetime, timedelta, timezone, date
 import asyncio
@@ -22,6 +22,7 @@ from ...services.dali import service as dali_service
 from ...core.config import settings
 import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
+from ...services.siren import siren_wav_bytes
 from fastapi import Form, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -1697,14 +1698,27 @@ def scoreboard_siren_upload(file: UploadFile = File(...), db: Session = Depends(
 
 @router.get('/scoreboard/siren')
 def scoreboard_siren_get(db: Session = Depends(get_db)):
+    # 1) Repo-bundled static siren (if present)
+    try:
+        here = os.path.dirname(__file__)
+        static_dir = os.path.normpath(os.path.join(here, '..', '..', 'static', 'sounds'))
+        for ext, mt in (('.mp3','audio/mpeg'),('.wav','audio/wav'),('.ogg','audio/ogg')):
+            p = os.path.join(static_dir, f'siren{ext}')
+            if os.path.exists(p):
+                return FileResponse(p, media_type=mt, filename=os.path.basename(p), headers={'Cache-Control': 'public, max-age=86400'})
+    except Exception:
+        pass
+    # 2) Admin-uploaded siren path from settings
     key = 'scoreboard.siren_path'
     row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    if not row or not row.value or not os.path.exists(row.value):
-        raise HTTPException(status_code=404, detail='Siren non trovata')
-    ext = os.path.splitext(row.value)[1].lower()
-    mt = 'audio/mpeg' if ext == '.mp3' else 'audio/wav' if ext == '.wav' else 'audio/ogg' if ext == '.ogg' else 'application/octet-stream'
-    name = os.path.basename(row.value)
-    return FileResponse(row.value, media_type=mt, filename=name)
+    if row and row.value and os.path.exists(row.value):
+        ext = os.path.splitext(row.value)[1].lower()
+        mt = 'audio/mpeg' if ext == '.mp3' else 'audio/wav' if ext == '.wav' else 'audio/ogg' if ext == '.ogg' else 'application/octet-stream'
+        name = os.path.basename(row.value)
+        return FileResponse(row.value, media_type=mt, filename=name, headers={'Cache-Control': 'public, max-age=86400'})
+    # 3) Generated built-in siren as last resort
+    data = siren_wav_bytes()
+    return Response(content=data, media_type='audio/wav', headers={'Cache-Control': 'public, max-age=86400'})
 
 # Admin: DALI mapping settings (JSON)
 @router.get('/admin/dali/mapping')
