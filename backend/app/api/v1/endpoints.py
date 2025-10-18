@@ -1881,6 +1881,27 @@ def scoreboard_siren_get(db: Session = Depends(get_db)):
         pass
     return Response(content=data, media_type='audio/wav', headers={'Cache-Control': 'public, max-age=86400', 'X-Siren-Source': 'generated'})
 
+
+@router.get('/admin/scoreboard/siren-info')
+def scoreboard_siren_info(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Diagnostic endpoint: returns which siren source would be served and the file size when applicable."""
+    try:
+        here = os.path.dirname(__file__)
+        static_dir = os.path.normpath(os.path.join(here, '..', '..', 'static', 'sounds'))
+        for ext, mt in (('.mp3','audio/mpeg'),('.wav','audio/wav'),('.ogg','audio/ogg')):
+            p = os.path.join(static_dir, f'siren{ext}')
+            if os.path.exists(p):
+                return {'source': 'static', 'path': p, 'size': os.path.getsize(p)}
+    except Exception:
+        pass
+    key = 'scoreboard.siren_path'
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if row and getattr(row,'value',None) and os.path.exists(row.value):
+        return {'source': 'uploaded', 'path': row.value, 'size': os.path.getsize(row.value)}
+    # fallback generated
+    data = siren_wav_bytes()
+    return {'source': 'generated', 'path': None, 'size': len(data)}
+
 # Admin: DALI mapping settings (JSON)
 @router.get('/admin/dali/mapping')
 def dali_mapping_get(db: Session = Depends(get_db), _: User = Depends(require_admin)):
