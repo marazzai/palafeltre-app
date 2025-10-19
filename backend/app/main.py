@@ -7,8 +7,10 @@ from .api.v1.router import api_router
 from .db.session import Base, engine, SessionLocal
 from .models.rbac import User, Role
 from .models.skates import SkateInventory, SkateRental
+from .models.settings import AppSetting
 from .core.security import hash_password
 from .api.v1.endpoints import skating_scheduler, game_scheduler, backup_scheduler, recurring_tasks_scheduler
+from .services.obs_v5 import obs_manager
 import asyncio
 import os
 from datetime import datetime, timezone
@@ -136,4 +138,24 @@ def on_startup():
     loop.create_task(game_scheduler())
     loop.create_task(backup_scheduler())
     loop.create_task(recurring_tasks_scheduler())
+    # Start OBS manager if obs settings stored
+    try:
+        db = SessionLocal()
+        try:
+            row = db.query(AppSetting).filter(AppSetting.key=='obs.host').first()
+            host = getattr(row, 'value', None) if row else None
+            row = db.query(AppSetting).filter(AppSetting.key=='obs.port').first()
+            port = getattr(row, 'value', None) if row else None
+            row = db.query(AppSetting).filter(AppSetting.key=='obs.password').first()
+            pwd = getattr(row, 'value', None) if row else None
+            if host and port:
+                try:
+                    obs_manager.set_config(host, int(port), pwd or '')
+                    logger.info('OBS manager started with saved settings')
+                except Exception:
+                    logger.warning('Failed to start OBS manager on startup')
+        finally:
+            db.close()
+    except Exception:
+        pass
     logger.info("Application startup complete")

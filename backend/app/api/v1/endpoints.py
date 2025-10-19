@@ -23,6 +23,7 @@ from ...core.config import settings
 import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
 from ...services.siren import siren_wav_bytes
+from ...services.obs_v5 import obs_manager
 from fastapi import Form, Request
 try:
     from slowapi import Limiter
@@ -1248,27 +1249,39 @@ def admin_obs_config(data: ObsConfig, db: Session = Depends(get_db), current: Us
         else: db.add(AppSetting(key=k, value=v))
     db.add(AuditLog(user_id=current.id, action='obs.config', details=f"{data.host}:{data.port}"))
     db.commit()
+    try:
+        # start/refresh persistent connection
+        obs_manager.set_config(data.host, int(data.port), data.password or '')
+    except Exception:
+        # don't fail the request if manager can't start here
+        pass
     return { 'ok': True }
 
 
 @router.get('/admin/obs/scan')
 def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(require_admin)):
-    # Try to import obs-websocket library and connect to list scenes.
+    # Use persistent obs manager if available
     try:
-        from obswebsocket import obsws, requests as obsreq  # type: ignore
-    except Exception as e:
-        raise HTTPException(status_code=501, detail=f"obs-websocket client not available on server: {e}")
-    # read config
-    host = _get_setting_value(db, 'obs.host', '') or ''
-    port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
-    pwd = _get_setting_value(db, 'obs.password', '') or ''
-    try:
-        ws = obsws(host, port, pwd)
-        ws.connect()
-        resp = ws.call(obsreq.GetSceneList())
-        scenes = [s['sceneName'] for s in resp.getScenes()]
-        ws.disconnect()
-        return {'scenes': scenes}
+        if obs_manager.is_connected():
+            scenes = obs_manager.get_scenes()
+            return {'scenes': scenes}
+        # fallback: try to use settings to temporarily connect
+        host = _get_setting_value(db, 'obs.host', '') or ''
+        port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
+        pwd = _get_setting_value(db, 'obs.password', '') or ''
+        if host:
+            # try to start manager with saved settings and wait briefly
+            obs_manager.set_config(host, port, pwd)
+            # wait up to 3s for connection
+            for _ in range(6):
+                if obs_manager.is_connected():
+                    break
+                time.sleep(0.5)
+            if obs_manager.is_connected():
+                return {'scenes': obs_manager.get_scenes()}
+        raise HTTPException(status_code=500, detail='OBS not connected')
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
 
@@ -1922,6 +1935,39 @@ def scoreboard_siren_info(db: Session = Depends(get_db), _: User = Depends(get_c
     # fallback generated
     data = siren_wav_bytes()
     return {'source': 'generated', 'path': None, 'size': len(data)}
+
+
+# OBS scene mapping for scoreboard activation/deactivation
+class ObsSceneMapping(BaseModel):
+    activate_scene: str | None = None
+    deactivate_scene: str | None = None
+
+
+@router.get('/admin/obs/mapping')
+def obs_mapping_get(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    row = db.query(AppSetting).filter(AppSetting.key == 'obs.mapping').first()
+    if not row or not row.value:
+        return {'activate_scene': None, 'deactivate_scene': None}
+    import json
+    try:
+        val = json.loads(row.value)
+        return {'activate_scene': val.get('activate_scene'), 'deactivate_scene': val.get('deactivate_scene')}
+    except Exception:
+        return {'activate_scene': None, 'deactivate_scene': None}
+
+
+@router.put('/admin/obs/mapping')
+def obs_mapping_set(data: ObsSceneMapping, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    import json
+    row = db.query(AppSetting).filter(AppSetting.key == 'obs.mapping').first()
+    payload = json.dumps({'activate_scene': data.activate_scene, 'deactivate_scene': data.deactivate_scene})
+    if row:
+        row.value = payload
+    else:
+        db.add(AppSetting(key='obs.mapping', value=payload))
+    db.add(AuditLog(user_id=current.id, action='obs.mapping.update', details=payload))
+    db.commit()
+    return {'ok': True}
 
 # Admin: DALI mapping settings (JSON)
 @router.get('/admin/dali/mapping')
