@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 
-from ..core.auth import get_current_user
-from ..core.permissions import require_permission, Permissions
-from ..models.rbac import User
-from ..db.session import get_db
-from ..services.obs_v5 import obs_manager
-from ..core.config import settings
+from ...core.auth import get_current_user
+from ...core.permissions import require_permission, Permissions
+from ...models.rbac import User
+from .endpoints import get_db
+from ...services.obs_v5 import obs_manager
+from ...core.config import settings
 
 router = APIRouter(prefix="/obs", tags=["obs"])
 

@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-from ..core.auth import AuthService, get_current_user, get_current_user_optional
-from ..core.permissions import require_permission, Permissions
-from ..models.rbac import User
-from ..db.session import get_db
-from ..core.security import hash_password
+from ...core.auth import AuthService, get_current_user, get_current_user_optional
+from ...core.permissions import require_permission, Permissions
+from ...models.rbac import User
+from .endpoints import get_db
+from ...core.security import hash_password
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -150,7 +150,7 @@ async def change_password(
     db: Session = Depends(get_db)
 ):
     """Change user password"""
-    from ..core.security import verify_password
+    from ...core.security import verify_password
     
     # Verify current password
     if not verify_password(request.current_password, current_user.hashed_password):
