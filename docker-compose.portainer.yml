@@ -24,11 +24,11 @@ services:
     networks:
       - palafeltre
 
-  # Backend FastAPI
+  # Backend FastAPI ottimizzato
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.optimized
     container_name: palafeltre-backend
     environment:
       # Database connection hardcoded per evitare problemi con variabili

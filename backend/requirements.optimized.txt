@@ -1,0 +1,30 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+SQLAlchemy==2.0.36
+# PostgreSQL driver - force binary version for all platforms
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# JWT e Auth - usa solo PyJWT invece di python-jose per evitare cryptography
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+email-validator==2.2.0
+bcrypt==3.2.2
+python-multipart==0.0.9
+
+# Web e API
+slowapi==0.1.9
+pytest==8.3.3
+httpx==0.27.2
+
+# OBS WebSocket - versione pre-built compatibile
+# Usiamo obs-websocket-py ma con fixed version che builda meglio
+obs-websocket-py==0.6.4
+
+# PDF Generation - versione pre-built quando possibile  
+reportlab==4.2.5
+
+# Per controlli HVAC - solo se necessario, altrimenti commenta
+# bacpypes3==0.0.73

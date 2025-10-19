@@ -1,0 +1,51 @@
+# Use Python base image
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System dependencies ottimizzati per build veloce
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    postgresql-client \
+    netcat-openbsd \
+    curl \
+    # Per reportlab PDF
+    libfreetype6-dev \
+    libjpeg-dev \
+    libpng-dev \
+    # Per compilazioni Rust se necessarie
+    pkg-config \
+    libssl-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip e installa wheel per build ottimizzati
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Installa prima le dipendenze che hanno wheel pre-built
+RUN pip install --no-cache-dir --only-binary=all \
+    fastapi==0.115.2 \
+    uvicorn==0.30.6 \
+    SQLAlchemy==2.0.36 \
+    psycopg2-binary==2.9.9 \
+    pydantic==2.9.2 \
+    PyJWT==2.8.0 \
+    bcrypt==3.2.2 \
+    || echo "Some packages will be compiled"
+
+# Copy e installa requirements ottimizzati
+COPY requirements.optimized.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy app source
+COPY app ./app
+
+# Create storage directory  
+RUN mkdir -p /app/storage
+
+# Expose port
+EXPOSE 8000
+
+# Start the app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
