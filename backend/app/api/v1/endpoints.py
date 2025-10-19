@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect
 from ...db.session import SessionLocal
@@ -118,7 +118,9 @@ def ping():
 class UserOut(BaseModel):
     id: int
     username: str | None = None
-    email: EmailStr
+    # Allow local or reserved hostnames (e.g. admin@palafeltre.local) used in self-hosted setups.
+    # Using plain `str` avoids pydantic's strict email domain validation which rejects special-use TLDs.
+    email: str
     full_name: str | None
     is_active: bool
     roles: list[str] = []
@@ -130,7 +132,8 @@ class UserOut(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
-    email: EmailStr
+    # Use plain str for email to allow local/self-hosted addresses (e.g. user@local)
+    email: str
     full_name: str | None = None
     password: str | None = None
 
@@ -302,7 +305,8 @@ def change_password(data: ChangePasswordRequest, current: User = Depends(get_cur
     return {"ok": True}
 
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    # Plain str to accept local/reserved domains used in on-prem deployments
+    email: str
 
 @router.post("/auth/forgot_password")
 def forgot_password(_: ForgotPasswordRequest):
