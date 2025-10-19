@@ -64,8 +64,8 @@ function UsersSection(){
     const res = await fetch('/api/v1/admin/users/create', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(payload) })
     if(!res.ok){ const txt = await res.text().catch(()=>null); alert('Errore: '+ (txt||res.status)); return }
     const d = await res.json()
-    setGeneratedPwd(d.password || null)
-    setNu({ username:'', email:'', full_name:'', password:'' })
+  setGeneratedPwd(d.password || null)
+  setNu({ username:'', full_name:'', password:'' })
     reload()
   }
 

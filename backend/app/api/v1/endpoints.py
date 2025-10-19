@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from typing import Dict, Set, List, Optional
 from datetime import datetime, timedelta, timezone, date
 import asyncio
+import time
 from ...core.security import verify_password, hash_password, create_access_token, decode_token
 from ...services.dali import service as dali_service
 from ...core.config import settings
@@ -221,7 +222,8 @@ def admin_create_user(data: AdminCreateUser, db: Session = Depends(get_db), _: U
     db.add(user); db.commit(); db.refresh(user)
     # assign roles if provided
     if getattr(data, 'role_ids', None):
-        roles_to_assign = db.query(Role).filter(Role.id.in_(data.role_ids)).all()
+        # guard against None for static type checkers by falling back to empty list
+        roles_to_assign = db.query(Role).filter(Role.id.in_(data.role_ids or [])).all()
         user.roles = roles_to_assign
         db.add(user); db.commit(); db.refresh(user)
     return { 'id': user.id, 'username': user.username, 'email': user.email, 'password': pwd }
@@ -1256,6 +1258,23 @@ def admin_obs_config(data: ObsConfig, db: Session = Depends(get_db), current: Us
         # don't fail the request if manager can't start here
         pass
     return { 'ok': True }
+
+
+@router.get('/admin/obs/status')
+def admin_obs_status(_: User = Depends(require_admin)):
+    try:
+        return {'connected': obs_manager.is_connected()}
+    except Exception:
+        return {'connected': False}
+
+
+@router.post('/admin/obs/disconnect')
+def admin_obs_disconnect(_: User = Depends(require_admin)):
+    try:
+        obs_manager.stop()
+        return {'ok': True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get('/admin/obs/scan')

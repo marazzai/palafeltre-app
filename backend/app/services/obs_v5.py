@@ -130,4 +130,3 @@ class ObsManager:
 
 # single global manager
 obs_manager = ObsManager()
-*** End Patch
