@@ -42,19 +42,27 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-primary flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo/Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">Palafeltre</h1>
-          <p className="text-secondary">Sistema di gestione del palaghiaccio</p>
+    <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)', background: 'linear-gradient(180deg, rgba(0,0,0,0.6), rgba(6,6,8,0.9))'}}>
+      <div style={{width: '100%', maxWidth: 520}}>
+        <div style={{textAlign: 'center', marginBottom: 'var(--space-6)'}}>
+          <div style={{display:'inline-flex', alignItems:'center', gap:12, padding:12}}>
+            <div style={{width:56, height:56, borderRadius:12, background:'linear-gradient(135deg,var(--accent-primary),var(--accent-secondary))', display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 17h18l-1 3H4l-1-3ZM8 13h8a4 4 0 0 0 4-4V5H4v4a4 4 0 0 0 4 4Z" />
+              </svg>
+            </div>
+            <div style={{textAlign:'left'}}>
+              <h1 style={{margin:0, fontSize:'var(--text-3xl)', fontWeight:700}}>Palafeltre</h1>
+              <div style={{fontSize:'var(--text-sm)', color:'var(--text-tertiary)'}}>Controllo e gestione palaghiaccio</div>
+            </div>
+          </div>
         </div>
 
         <Card>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-semibold text-primary">Accedi</h2>
-              <p className="text-secondary mt-2">Inserisci le tue credenziali per continuare</p>
+          <form onSubmit={handleSubmit} className="" style={{display:'grid', gap: 'var(--space-4)'}}>
+            <div style={{textAlign:'center', marginBottom: 'var(--space-2)'}}>
+              <h2 style={{margin:0, fontSize:'var(--text-2xl)', fontWeight:700}}>Accedi</h2>
+              <p style={{margin: '6px 0 0 0', color:'var(--text-secondary)'}}>Inserisci username e password</p>
             </div>
 
             {error && (
@@ -97,17 +105,14 @@ export function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-secondary">
-              Credenziali di default: <code className="bg-tertiary px-2 py-1 rounded">admin / adminadmin</code>
-            </p>
+          <div style={{marginTop: 'var(--space-4)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <div style={{fontSize:12, color:'var(--text-tertiary)'}}>Credenziali: <strong>admin / adminadmin</strong></div>
+            <a href="/" style={{fontSize:12, color:'var(--accent-primary)'}}>Guida</a>
           </div>
         </Card>
 
-        <div className="mt-8 text-center">
-          <p className="text-xs text-secondary">
-            Palafeltre Management System v1.0
-          </p>
+        <div style={{marginTop: 'var(--space-6)', textAlign:'center', color:'var(--text-tertiary)', fontSize:12}}>
+          Palafeltre Management System • v1.0
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@ type UserInfo = {
 type MenuItem = {
   path: string
   label: string
-  icon: 'home' | 'wrench' | 'checklist' | 'files' | 'tasks' | 'skate' | 'settings'
+  icon: 'home' | 'wrench' | 'checklist' | 'files' | 'tasks' | 'skate' | 'settings' | 'ok' | 'logout'
   requireAdmin?: boolean
   requirePermission?: string
 }
@@ -30,6 +30,7 @@ const menuItems: MenuItem[] = [
   { path: '/my-shifts', label: 'I Miei Turni', icon: 'tasks' },
   { path: '/availability', label: 'Disponibilità', icon: 'tasks' },
   { path: '/game', label: 'Partita', icon: 'tasks' },
+  { path: '/scoreboard', label: 'Scoreboard', icon: 'ok' },
   { path: '/lights', label: 'Controllo Luci', icon: 'tasks' },
   { path: '/skating', label: 'Pattinaggio', icon: 'skate' },
   { path: '/skate-rental', label: 'Noleggio Pattini', icon: 'skate' },
