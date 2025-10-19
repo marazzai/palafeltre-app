@@ -1,0 +1,89 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: palafeltre-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-palafeltre}
+      POSTGRES_USER: ${POSTGRES_USER:-palafeltre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-palafeltre} -d ${POSTGRES_DB:-palafeltre}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - palafeltre
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: palafeltre-backend
+    environment:
+      # Database
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-palafeltre}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-palafeltre}
+      - STORAGE_PATH=/app/storage
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_HOURS=${ACCESS_TOKEN_EXPIRE_HOURS:-24}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      
+      # Admin User
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@palafeltre.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-adminadmin}
+      - FORCE_RESET_ADMIN_PASSWORD=${FORCE_RESET_ADMIN_PASSWORD:-true}
+      
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000}
+      - CORS_ORIGIN_REGEX=${CORS_ORIGIN_REGEX}
+      
+      # OBS
+      - OBS_HOST=${OBS_HOST:-localhost}
+      - OBS_PORT=${OBS_PORT:-4455}
+      - OBS_PASSWORD=${OBS_PASSWORD:-}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - JSON_LOGS=${JSON_LOGS:-false}
+      
+      # Rate Limiting
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+      
+      # Application
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - palafeltre
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: palafeltre-frontend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - palafeltre
+
+volumes:
+  db_data:
+
+networks:
+  palafeltre:
+    driver: bridge
