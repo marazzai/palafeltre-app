@@ -1,103 +1,123 @@
 # 🚀 Deploy Guide - Palafeltre App
 
-## Problema Deploy risolto
+# 🚀 Deploy Guide - Palafeltre App
 
-Il problema `env file /data/compose/10/.env not found` è dovuto al fatto che Portainer/Docker Compose non trova il file di configurazione delle variabili d'ambiente.
+## ⚠️ Problema Database PostgreSQL risolto
 
-## 📋 Soluzione per Portainer
+Il problema `container palafeltre-db exited (1)` è comune con PostgreSQL in Portainer. Ecco le soluzioni:
 
-### Opzione 1: Variabili d'Ambiente in Portainer
+## � Soluzione Rapida
 
-Invece di usare un file `.env`, configura le variabili direttamente nell'interfaccia di Portainer:
+### Usa docker-compose.simple.yml (Raccomandato)
 
-1. **Vai allo Stack in Portainer**
-2. **Clicca su "Environment variables"**
-3. **Aggiungi queste variabili essenziali**:
-
-```bash
-# Database
-POSTGRES_DB=palafeltre
-POSTGRES_USER=palafeltre
-POSTGRES_PASSWORD=tua_password_sicura_db
-
-# Security
-JWT_SECRET=tuo_jwt_secret_molto_sicuro_64_caratteri_minimo
-ADMIN_USERNAME=admin
-ADMIN_EMAIL=admin@tuodominio.com
-ADMIN_PASSWORD=tua_password_admin_sicura
-
-# CORS (sostituisci con il tuo dominio)
-CORS_ORIGINS=https://tuodominio.com,http://localhost:8080
-VITE_API_BASE_URL=/api
-
-# OBS (opzionale)
-OBS_HOST=localhost
-OBS_PORT=4455
-OBS_PASSWORD=password_obs_opzionale
-```
-
-### Opzione 2: File .env nel Repository
-
-Se preferisci usare un file `.env`:
-
-1. **Crea file `.env` nella root del progetto** (stesso livello di docker-compose.yml)
-2. **Copia il contenuto da `.env.prod.example`**
-3. **Modifica i valori per la produzione**
-4. **Carica tutto su Git** (il file .env sarà ignorato per sicurezza)
-
-### Opzione 3: Docker Compose Modificato
-
-Modifica il `docker-compose.yml` per non richiedere il file .env:
+Questo file ha configurazioni più compatibili per Portainer:
 
 ```yaml
-# Rimuovi la riga "env_file: - .env" dai servizi
-# Usa solo environment variables
+# Usa PostgreSQL 15 invece di 16 (più stabile)
+# Configurazione di autenticazione semplificata
+# Healthcheck più permissivo
+# Password di default se non specificata
 ```
 
-## 🔧 Configurazione Minima Richiesta
-
-Per far funzionare l'app, servono almeno queste variabili:
+### Variabili Minime Richieste per Portainer:
 
 ```bash
-# Essenziali
-POSTGRES_DB=palafeltre
-POSTGRES_USER=palafeltre
-POSTGRES_PASSWORD=password_sicura
+# ESSENZIALE - Senza questa il database non parte
+POSTGRES_PASSWORD=password_sicura_db
 
-# Sicurezza (CAMBIA QUESTI!)
-JWT_SECRET=stringa_segreta_molto_lunga_e_sicura
+# Raccomandato per produzione
+ADMIN_PASSWORD=password_admin_sicura
+JWT_SECRET=stringa_segreta_64_caratteri_minimo
+CORS_ORIGINS=http://tuo-dominio:8080
+```
+
+## 🛠 Troubleshooting Database
+
+### Problema 1: PostgreSQL non si avvia
+
+**Sintomi**: `container palafeltre-db exited (1)`
+
+**Soluzioni**:
+1. **Password mancante**: Assicurati che `POSTGRES_PASSWORD` sia impostata
+2. **Versione incompatibile**: Usa `docker-compose.simple.yml` (PostgreSQL 15)
+3. **Volume corrotto**: Elimina il volume e ricrea:
+   ```bash
+   docker volume rm palafeltre-app_db_data
+   ```
+
+### Problema 2: "auth method scram-sha-256 failed"
+
+**Soluzione**: Usa `docker-compose.simple.yml` che ha l'autenticazione configurata correttamente.
+
+### Problema 3: Permessi volume
+
+**Soluzione**: Il container PostgreSQL deve avere accesso al volume:
+```bash
+# Il volume viene creato automaticamente con i permessi corretti
+```
+
+## 📋 Deploy Steps per Portainer
+
+### Metodo 1: Con docker-compose.simple.yml (Più Facile)
+
+1. **In Portainer, crea nuovo Stack**
+2. **Nome**: `palafeltre`
+3. **Upload docker-compose.simple.yml** o copia il contenuto
+4. **Environment Variables** (solo questa è obbligatoria):
+   ```
+   POSTGRES_PASSWORD=mia_password_db_sicura
+   ```
+5. **Deploy Stack**
+6. **Aspetta 2-3 minuti** per l'inizializzazione
+7. **Esegui init script**:
+   ```bash
+   docker exec palafeltre-backend python init_permissions.py
+   ```
+8. **Accedi**: `http://tuo-server:8080`
+   - Username: `admin`
+   - Password: `adminadmin`
+
+### Metodo 2: Con docker-compose.portainer.yml (Completo)
+
+Se preferisci più controllo, usa il file completo ma aggiungi più variabili:
+
+```bash
+# Database (OBBLIGATORIO)
+POSTGRES_PASSWORD=password_db_sicura
+
+# Security (RACCOMANDATO)
+JWT_SECRET=stringa_segreta_lunga_e_sicura_64_caratteri_minimo
 ADMIN_PASSWORD=password_admin_sicura
 
-# Network
-CORS_ORIGINS=http://tuo-server:8080
+# Network (per accesso da altri host)
+CORS_ORIGINS=http://192.168.1.100:8080,http://nas.local:8080
 ```
 
-## 🚀 Passi per Deploy Immediato
+## 🚀 Test del Deploy
 
-### Per Portainer:
+Dopo il deploy, verifica:
 
-1. **Copia il docker-compose.yml**
-2. **Configura Environment Variables in Portainer** con i valori sopra
-3. **Lancia lo stack**
-4. **Aspetta che i container si avviino**
-5. **Accedi su `http://tuo-server:8080`**
-6. **Login con**: `admin` / `tua_password_admin_sicura`
-
-### Inizializzazione Database:
-
-Dopo il primo avvio, esegui:
-```bash
-docker exec palafeltre-backend python init_permissions.py
-```
+1. **Database**: `docker logs palafeltre-db` → dovrebbe dire "ready to accept connections"
+2. **Backend**: `docker logs palafeltre-backend` → dovrebbe avviarsi senza errori
+3. **Frontend**: `docker logs palafeltre-frontend` → nginx dovrebbe partire
+4. **Web**: Vai su `http://tuo-server:8080` → dovrebbe aprire la pagina di login
 
 ## 🔐 Sicurezza per Produzione
 
 **⚠️ IMPORTANTE - Cambia questi valori per la produzione:**
 
-1. **JWT_SECRET**: Stringa casuale di almeno 64 caratteri
-2. **ADMIN_PASSWORD**: Password forte per l'admin
-3. **POSTGRES_PASSWORD**: Password sicura per il database
+1. **POSTGRES_PASSWORD**: Password forte per il database
+2. **JWT_SECRET**: Stringa casuale di almeno 64 caratteri
+3. **ADMIN_PASSWORD**: Password forte per l'admin
 4. **CORS_ORIGINS**: Solo i tuoi domini autorizzati
+
+Esempio di configurazione sicura:
+```bash
+POSTGRES_PASSWORD=Db@SecureP4ssw0rd2024!
+JWT_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6A7B8C9D0E1F2G3H4
+ADMIN_PASSWORD=Admin@SecureP4ssw0rd2024!
+CORS_ORIGINS=https://palafeltre.miodominio.com
+```
 
 ## 🛠 Troubleshooting
 
