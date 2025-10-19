@@ -3,11 +3,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
 import jwt
-from datetime import datetime, timedelta
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from datetime import datetime, timedelta, timezone
 
 from ..core.config import settings
 from ..models.rbac import User
-from ..db.session import get_db
+from ..db.session import SessionLocal, get_db
 
 security = HTTPBearer(auto_error=False)
 
@@ -16,40 +17,40 @@ class AuthService:
     
     @staticmethod
     def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
-        """Create JWT access token"""
+        """Create JWT access token using PyJWT"""
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
+            expire = datetime.now(timezone.utc) + timedelta(hours=settings.access_token_expire_hours)
         
         to_encode = {
             "sub": str(user_id),
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "type": "access"
         }
         
-        return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     
     @staticmethod
     def create_refresh_token(user_id: int) -> str:
-        """Create JWT refresh token"""
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        """Create JWT refresh token using PyJWT"""
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
         
         to_encode = {
             "sub": str(user_id),
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "type": "refresh"
         }
         
-        return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     
     @staticmethod
     def verify_token(token: str, token_type: str = "access") -> Optional[int]:
-        """Verify JWT token and return user ID"""
+        """Verify JWT token and return user ID - using PyJWT"""
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
             user_id = payload.get("sub")
             token_type_check = payload.get("type", "access")
             
@@ -57,9 +58,9 @@ class AuthService:
                 return None
                 
             return int(user_id)
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             return None
-        except jwt.JWTError:
+        except InvalidTokenError:
             return None
     
     @staticmethod

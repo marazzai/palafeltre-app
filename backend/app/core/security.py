@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError, ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from .config import settings
 
@@ -13,6 +14,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create JWT access token using PyJWT (same robustezza as python-jose)
+    Supports both expiring and non-expiring tokens
+    """
     # When ACCESS_TOKEN_EXPIRE_MINUTES == 0, issue a token without exp claim
     if expires_delta is None:
         minutes = settings.access_token_expire_minutes
@@ -20,22 +25,54 @@ def create_access_token(subject: str, expires_delta: Optional[timedelta] = None)
             expires_delta = timedelta(minutes=minutes)
         else:
             expires_delta = None
-    # Allow non-str values (exp may be int) so static checkers don't complain
+    
+    # Build payload with subject
     to_encode: dict[str, object] = {"sub": subject}
+    
     if expires_delta is not None:
         expire = datetime.now(timezone.utc) + expires_delta
-        # jose accepts numeric exp (seconds since epoch)
-        to_encode["exp"] = int(expire.timestamp())
-    return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+        # PyJWT accepts datetime objects directly (more robust than timestamp)
+        to_encode["exp"] = expire
+    
+    # Create token with same security as python-jose
+    return jwt.encode(
+        payload=to_encode, 
+        key=settings.jwt_secret, 
+        algorithm=settings.jwt_algorithm
+    )
 
 def decode_token(token: str) -> Optional[dict]:
+    """
+    Decode JWT token using PyJWT with same security options as python-jose
+    Returns None on any error (invalid signature, expired, malformed, etc.)
+    """
     try:
-        # Options: don't require exp if not present (session-only mode)
-        return jwt.decode(
-            token,
-            settings.jwt_secret,
+        # Decode with same security options as python-jose version
+        # verify_signature=True (default), verify_exp=True (default)
+        # options parameter controls verification behavior
+        decoded = jwt.decode(
+            jwt=token,
+            key=settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            options={"verify_signature": True, "verify_exp": True, "require_exp": False},
+            # Same verification options as jose version
+            options={
+                "verify_signature": True,  # Always verify signature
+                "verify_exp": True,        # Verify expiration if present
+                "require_exp": False,      # Don't require exp claim (allow session tokens)
+                "verify_aud": False,       # Don't require audience
+                "verify_iss": False,       # Don't require issuer
+            }
         )
-    except JWTError:
+        return decoded
+    except ExpiredSignatureError:
+        # Token is expired
+        return None
+    except InvalidTokenError:
+        # Token is invalid (malformed, wrong signature, etc.)
+        return None
+    except PyJWTError:
+        # Any other JWT error
+        return None
+    except Exception:
+        # Catch-all for any unexpected errors
         return None

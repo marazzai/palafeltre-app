@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Generator
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from ..core.config import settings
 
 # Create engine with SQLite-friendly connect args when using SQLite URLs (tests)
@@ -15,3 +15,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
     pass
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Dependency to get database session"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
