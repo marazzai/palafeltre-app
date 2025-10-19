@@ -26,7 +26,7 @@ Il problema `container palafeltre-db is unhealthy` è stato risolto! Usa **docke
 ### Step 3: Attendi e Accedi
 - **Attesa**: 2-3 minuti per inizializzazione database
 - **Frontend**: http://YOUR_SERVER:8080
-- **Backend API**: http://YOUR_SERVER:8000/docs
+- **Backend API**: http://YOUR_SERVER:8001/docs
 - **Login**: `admin` / `adminadmin`
 
 ## 🔧 Personalizzazione (Opzionale)
@@ -73,6 +73,31 @@ environment:
 - **Causa**: Accesso da IP/dominio non autorizzato
 - **Soluzione**: Modifica `CORS_ORIGINS` nel compose file
 
+### 5. Porta già in uso (address already in use)
+- **Errore**: `failed to bind host port... address already in use`
+- **Causa**: Un altro container/servizio usa la stessa porta
+- **Soluzioni**:
+  
+  **Opzione A**: Usa `docker-compose.altports.yml` (porte alternative)
+  - Frontend: **8081** (invece di 8080)
+  - Backend: **8002** (invece di 8001)
+  - Database: **5435** (invece di 5433)
+  
+  **Opzione B**: Ferma servizi conflittuali
+  ```bash
+  # Trova chi usa la porta
+  netstat -tulpn | grep :8000
+  # Ferma il container che la occupa
+  docker stop container-name
+  ```
+  
+  **Opzione C**: Modifica porte manualmente nel compose file
+  ```yaml
+  ports:
+    - "NUOVA_PORTA:8000"  # Backend
+    - "NUOVA_PORTA:80"    # Frontend  
+  ```
+
 ## 📊 Monitoring
 
 ### Verifica Deploy Success
@@ -91,7 +116,7 @@ environment:
 ```
 
 ### Health Endpoints
-- Backend: http://YOUR_SERVER:8000/health
+- Backend: http://YOUR_SERVER:8001/health
 - Frontend: http://YOUR_SERVER:8080 (nginx status)
 
 ## 🔒 Security per Produzione
@@ -118,8 +143,8 @@ environment:
 
 ### Porte
 - **Frontend**: 8080 (Web UI)
-- **Backend**: 8000 (API)
-- **Database**: 5432 (interno)
+- **Backend**: 8001 (API)  
+- **Database**: 5433 (esterno) / 5432 (interno)
 
 ### Volumi
 - **db_data**: Dati PostgreSQL persistenti

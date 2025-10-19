@@ -1,5 +1,5 @@
 services:
-  # Database PostgreSQL ottimizzato per Portainer
+  # Database PostgreSQL con porta alternativa
   db:
     image: postgres:15-alpine
     container_name: palafeltre-db
@@ -12,7 +12,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5435:5432"
     restart: unless-stopped
     # Healthcheck semplificato che funziona in Portainer
     healthcheck:
@@ -24,7 +24,7 @@ services:
     networks:
       - palafeltre
 
-  # Backend FastAPI
+  # Backend FastAPI con porta alternativa
   backend:
     build:
       context: ./backend
@@ -42,8 +42,8 @@ services:
       ADMIN_PASSWORD: adminadmin
       FORCE_RESET_ADMIN_PASSWORD: "true"
       
-      # CORS - Adjust for your domain
-      CORS_ORIGINS: "http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080"
+      # CORS - Adjust for your domain (usa nuova porta backend)
+      CORS_ORIGINS: "http://localhost:8081,http://localhost:3000,http://127.0.0.1:8081"
       
       # App config
       LOG_LEVEL: INFO
@@ -54,7 +54,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8001:8000"
+      - "8002:8000"
     restart: unless-stopped
     networks:
       - palafeltre
@@ -66,7 +66,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # Frontend React
+  # Frontend React con porta alternativa
   frontend:
     build:
       context: ./frontend
@@ -75,7 +75,7 @@ services:
     environment:
       VITE_API_BASE_URL: /api
     ports:
-      - "8080:80"
+      - "8081:80"
     depends_on:
       - backend
     restart: unless-stopped
