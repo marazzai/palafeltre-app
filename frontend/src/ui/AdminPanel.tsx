@@ -6,7 +6,7 @@ type Role = { id:number; name:string; permissions:string[] }
 
 export default function AdminPanel(){
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'users'|'roles'|'modules'|'branding'|'security'>('users')
+  const [tab, setTab] = useState<'users'|'roles'>('users')
   // client-side guard: redirect non-admin
   useEffect(()=>{
     const t = localStorage.getItem('token')||''
@@ -23,17 +23,11 @@ export default function AdminPanel(){
         <button className="btn btn-outline" onClick={()=> navigate('/admin/users')}>Apri gestione Utenti (pagina dedicata)</button>
       </div>
       <div style={{display:'flex', gap:8, marginBottom:12}}>
-        <button className={tab==='users'?'btn':'btn btn-outline'} onClick={()=>setTab('users')}>Utenti & Ruoli</button>
-        <button className={tab==='roles'?'btn':'btn btn-outline'} onClick={()=>setTab('roles')}>Permessi</button>
-        <button className={tab==='modules'?'btn':'btn btn-outline'} onClick={()=>setTab('modules')}>Moduli</button>
-        <button className={tab==='branding'?'btn':'btn btn-outline'} onClick={()=>setTab('branding')}>Branding & PDF</button>
-        <button className={tab==='security'?'btn':'btn btn-outline'} onClick={()=>setTab('security')}>Sicurezza</button>
+        <button className={tab==='users'?'btn':'btn btn-outline'} onClick={()=>setTab('users')}>Utenti</button>
+        <button className={tab==='roles'?'btn':'btn btn-outline'} onClick={()=>setTab('roles')}>Ruoli</button>
       </div>
       {tab==='users' && <UsersSection/>}
       {tab==='roles' && <RolesSection/>}
-      {tab==='modules' && <ModulesSection/>}
-      {tab==='branding' && <BrandingSection/>}
-      {tab==='security' && <SecuritySection/>}
       <hr/>
       <AnalyticsBackupSection/>
     </div>
@@ -57,15 +51,16 @@ function UsersSection(){
 
   // Create user modal
   const [showCreate, setShowCreate] = useState(false)
-  const [nu, setNu] = useState({ username:'', email:'', full_name:'', password:'' })
+  const [nu, setNu] = useState({ username:'', full_name:'', password:'' })
   const [generatedPwd, setGeneratedPwd] = useState<string | null>(null)
+  const [selectedRoleIdsCreate, setSelectedRoleIdsCreate] = useState<number[]>([])
   const createUser = async ()=>{
-    // Use admin endpoint which returns generated password when omitted
-    if(!nu.email.trim()) return
+    // Create user without requiring email; server will generate placeholder if needed
     setGeneratedPwd(null)
-    const payload: any = { email: nu.email.trim(), full_name: nu.full_name.trim() || undefined }
+    const payload: any = { full_name: nu.full_name.trim() || undefined }
     if(nu.username.trim()) payload.username = nu.username.trim()
     if(nu.password.trim()) payload.password = nu.password.trim()
+    if(selectedRoleIdsCreate.length) payload.role_ids = selectedRoleIdsCreate
     const res = await fetch('/api/v1/admin/users/create', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(payload) })
     if(!res.ok){ const txt = await res.text().catch(()=>null); alert('Errore: '+ (txt||res.status)); return }
     const d = await res.json()
@@ -129,9 +124,17 @@ function UsersSection(){
             <div className="modal-header"><strong>Crea utente</strong></div>
             <div className="modal-body" style={{display:'grid', gap:8}}>
               <label>Username<input className="input" value={nu.username} onChange={e=> setNu({...nu, username: e.target.value})} /></label>
-              <label>Email<input className="input" value={nu.email} onChange={e=> setNu({...nu, email: e.target.value})} /></label>
               <label>Nome completo<input className="input" value={nu.full_name} onChange={e=> setNu({...nu, full_name: e.target.value})} /></label>
               <label>Password (opzionale, se vuota verrà generata)<input className="input" type="password" value={nu.password} onChange={e=> setNu({...nu, password: e.target.value})} /></label>
+              <div>
+                <div style={{fontWeight:600, marginBottom:6}}>Assegna ruolo(i)</div>
+                {roles.map(r=> (
+                  <label key={r.id} style={{display:'flex', alignItems:'center', gap:8}}>
+                    <input type="checkbox" checked={selectedRoleIdsCreate.includes(r.id)} onChange={()=> setSelectedRoleIdsCreate(prev=> prev.includes(r.id)? prev.filter(x=>x!==r.id): [...prev,r.id])} />
+                    <span>{r.name}</span>
+                  </label>
+                ))}
+              </div>
               {generatedPwd && (
                 <div style={{background:'#f3f4f6', padding:8, borderRadius:6}}>
                   <div style={{fontSize:13}}>Password generata: <strong style={{fontFamily:'monospace'}}>{generatedPwd}</strong></div>
@@ -139,10 +142,10 @@ function UsersSection(){
                 </div>
               )}
             </div>
-            <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
-              <button className="btn btn-outline" onClick={()=> setShowCreate(false)}>Annulla</button>
-              <button className="btn" onClick={createUser} disabled={!nu.email.trim()}>Crea</button>
-            </div>
+                    <div className="modal-footer" style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+                      <button className="btn btn-outline" onClick={()=> setShowCreate(false)}>Annulla</button>
+                      <button className="btn" onClick={createUser} disabled={!nu.username.trim()}>Crea</button>
+                    </div>
           </div>
         </div>
       )}

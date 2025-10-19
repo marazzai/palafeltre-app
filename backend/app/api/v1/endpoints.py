@@ -134,9 +134,10 @@ class UserCreate(BaseModel):
 
 class AdminCreateUser(BaseModel):
     username: str | None = None
-    email: EmailStr
+    email: str | None = None
     full_name: str | None = None
     password: str | None = None
+    role_ids: list[int] | None = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -187,21 +188,41 @@ def admin_create_user(data: AdminCreateUser, db: Session = Depends(get_db), _: U
         alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
         return ''.join(secrets.choice(alphabet) for _ in range(n))
 
-    username = data.username
-    if username is None:
-        # derive username from email local part
-        username = data.email.split('@',1)[0]
+    username = (data.username or '').strip() or None
+    # If email missing, we'll generate a placeholder using the username or a random suffix
+    email = (data.email or '').strip() or None
+    if username is None and email is None:
+        raise HTTPException(status_code=400, detail='Username or email required')
+    if username is None and email:
+        username = email.split('@', 1)[0]
+    # ensure unique constraints: check username and email where applicable
     if _has_username_column(db):
-        if db.query(User).filter((User.email == data.email) | (User.username == username)).first():
+        q = db.query(User).filter((User.username == username) | (User.email == email))
+        if q.first():
             raise HTTPException(status_code=400, detail='Username o email già in uso')
     else:
-        if db.query(User).filter(User.email == data.email).first():
+        if email and db.query(User).filter(User.email == email).first():
             raise HTTPException(status_code=400, detail='Email già in uso')
+    # if email still missing, fabricate a local placeholder to satisfy DB constraints
+    if not email:
+        base = username or 'user'
+        # ensure uniqueness by appending a short random suffix if needed
+        candidate = f"{base}@local"
+        i = 0
+        while db.query(User).filter(User.email == candidate).first():
+            i += 1
+            candidate = f"{base}{i}@local"
+        email = candidate
 
     pwd = data.password or gen_password(12)
-    user = User(username=username, email=data.email, full_name=data.full_name, hashed_password=hash_password(pwd))
+    user = User(username=username, email=email, full_name=data.full_name, hashed_password=hash_password(pwd))
     user.must_change_password = True
     db.add(user); db.commit(); db.refresh(user)
+    # assign roles if provided
+    if getattr(data, 'role_ids', None):
+        roles_to_assign = db.query(Role).filter(Role.id.in_(data.role_ids)).all()
+        user.roles = roles_to_assign
+        db.add(user); db.commit(); db.refresh(user)
     return { 'id': user.id, 'username': user.username, 'email': user.email, 'password': pwd }
 
 
