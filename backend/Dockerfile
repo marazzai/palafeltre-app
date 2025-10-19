@@ -25,6 +25,8 @@ COPY requirements.txt ./
 # Upgrade packaging tools so pip can use prebuilt wheels when available
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir --upgrade cython
+# Only install the main requirements here. Heavy/optional packages (obs-websocket, slowapi)
+# were moved to requirements-optional.txt to avoid build failures on minimal hosts.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app source

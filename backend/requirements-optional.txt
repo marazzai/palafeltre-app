@@ -1,0 +1,4 @@
+# Optional or heavy build deps that may require extra system packages or rust toolchain
+slowapi==0.1.9
+obs-websocket-py==0.6.4
+# add other optional packages here if needed
