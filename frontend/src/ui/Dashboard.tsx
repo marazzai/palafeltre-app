@@ -42,66 +42,193 @@ export function Dashboard(){
   }, [summary?.next_public_event, now])
 
   return (
-    <div className="container" style={{display:'grid', gap:16}}>
-      {/* Riepilogo personale */}
-      <div className="card" style={{padding:16}}>
-        <h2 style={{marginTop:0, marginBottom:8}}>{summary?.greeting ?? 'Ciao!'}</h2>
-        {summary?.next_shift ? (
-          <p className="text-muted">Prossimo turno: <strong>{summary.next_shift.date}, {summary.next_shift.time}, {summary.next_shift.role}</strong></p>
-        ) : <p className="text-muted">Nessun turno pianificato.</p>}
+    <div className="container">
+      <div className="page-header">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-subtitle">Panoramica delle attività e stato del palaghiaccio</p>
       </div>
 
-      {/* Griglia widgets */}
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:16}}>
-        <a href="/" className="card" style={{padding:16, textDecoration:'none', color:'inherit'}} aria-label="Prossimo evento pubblico">
-          <h3 style={{marginTop:0}}>Prossimo evento pubblico</h3>
-          <p className="text-muted" style={{marginBottom:8}}>Inizio tra</p>
-          <div style={{fontSize:24, fontWeight:700}}>{countdown ?? '—'}</div>
-        </a>
-
-        <a href={summary?.maintenance?.link ?? '/maintenance'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
-          <h3 style={{marginTop:0, display:'flex', alignItems:'center', gap:8}}><Icon name="wrench"/> Stato manutenzioni</h3>
-          <p className="text-muted">Segnalazioni aperte</p>
-          <div style={{display:'flex', gap:16}}>
-            <div><strong style={{fontSize:22}}>{summary?.maintenance?.open ?? 0}</strong> totali</div>
-            <div><strong style={{fontSize:22, color:'var(--color-danger)'}}>{summary?.maintenance?.high_priority ?? 0}</strong> alta priorità</div>
-          </div>
-        </a>
-
-        <a href={summary?.my_tasks?.link ?? '/tasks'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
-          <h3 style={{marginTop:0}}>I miei incarichi</h3>
-          <div style={{display:'flex', gap:16}}>
-            <div><strong style={{fontSize:22}}>{summary?.my_tasks?.assigned ?? 0}</strong> assegnati</div>
-            <div><strong style={{fontSize:22, color:'var(--color-warning)'}}>{summary?.my_tasks?.due_soon ?? 0}</strong> in scadenza</div>
-          </div>
-        </a>
-
-        <a href={summary?.checklists?.link ?? '/checklists'} className="card" style={{padding:16, textDecoration:'none', color:'inherit'}}>
-          <h3 style={{marginTop:0}}>Checklist da completare</h3>
-          <p className="text-muted">Oggi</p>
-          <div style={{fontSize:22, fontWeight:700}}>{summary?.checklists?.pending_today ?? 0}</div>
-        </a>
-
-        <div className="card" style={{padding:16}}>
-          <h3 style={{marginTop:0}}>Ultimi documenti caricati</h3>
-          <ul style={{margin:0, paddingLeft:18}}>
-            {(Array.isArray(summary?.recent_documents) ? summary!.recent_documents : []).slice(0,3).map((d,i) => (
-              <li key={i}><a href={d.path}>{d.name}</a></li>
-            ))}
-          </ul>
+      {/* Welcome card */}
+      <div className="card" style={{marginBottom: 'var(--space-8)'}}>
+        <div className="card-body">
+          <h2 style={{marginTop: 0, marginBottom: 'var(--space-3)', fontSize: 'var(--text-3xl)'}}>
+            {summary?.greeting ?? 'Benvenuto!'}
+          </h2>
+          {summary?.next_shift ? (
+            <p className="text-secondary" style={{fontSize: 'var(--text-lg)', marginBottom: 0}}>
+              Prossimo turno: <strong style={{color: 'var(--text-primary)'}}>{summary.next_shift.date}, {summary.next_shift.time} - {summary.next_shift.role}</strong>
+            </p>
+          ) : (
+            <p className="text-secondary" style={{fontSize: 'var(--text-lg)', marginBottom: 0}}>
+              Nessun turno pianificato
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Accesso rapido */}
-      <div className="card" style={{padding:16}}>
-        <h3 style={{marginTop:0}}>Accesso rapido</h3>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:12}}>
-          <a href="/maintenance" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="wrench"/> Manutenzioni</a>
-          <a href="/tasks" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="checklist"/> Incarichi</a>
-          <a href="/checklists" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="tasks"/> Checklist</a>
-          <a href="/documents" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="files"/> Documenti</a>
-          <a href="/roles" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="tasks"/> Ruoli</a>
-          <a href="/users" className="btn btn-outline" style={{justifyContent:'flex-start'}}><Icon name="users"/> Utenti</a>
+      {/* Stats grid */}
+      <div className="grid grid-4" style={{marginBottom: 'var(--space-8)'}}>
+        <div className="card">
+          <div className="card-body" style={{textAlign: 'center'}}>
+            <div style={{
+              width: '48px', 
+              height: '48px', 
+              background: 'var(--accent-primary)', 
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto var(--space-4)'
+            }}>
+              <Icon name="home" color="white" />
+            </div>
+            <h3 style={{margin: '0 0 var(--space-2)', fontSize: 'var(--text-xl)'}}>Prossimo evento</h3>
+            <div style={{fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)'}}>
+              {countdown ?? '—'}
+            </div>
+            <p className="text-tertiary" style={{fontSize: 'var(--text-sm)', margin: 0}}>
+              tempo rimanente
+            </p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body" style={{textAlign: 'center'}}>
+            <div style={{
+              width: '48px', 
+              height: '48px', 
+              background: 'var(--accent-warning)', 
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto var(--space-4)'
+            }}>
+              <Icon name="wrench" color="white" />
+            </div>
+            <h3 style={{margin: '0 0 var(--space-2)', fontSize: 'var(--text-xl)'}}>Manutenzioni</h3>
+            <div style={{fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)'}}>
+              {summary?.maintenance?.open ?? 0}
+            </div>
+            <p className="text-tertiary" style={{fontSize: 'var(--text-sm)', margin: 0}}>
+              aperte ({summary?.maintenance?.high_priority ?? 0} prioritarie)
+            </p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body" style={{textAlign: 'center'}}>
+            <div style={{
+              width: '48px', 
+              height: '48px', 
+              background: 'var(--accent-success)', 
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto var(--space-4)'
+            }}>
+              <Icon name="checklist" color="white" />
+            </div>
+            <h3 style={{margin: '0 0 var(--space-2)', fontSize: 'var(--text-xl)'}}>I miei incarichi</h3>
+            <div style={{fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)'}}>
+              {summary?.my_tasks?.assigned ?? 0}
+            </div>
+            <p className="text-tertiary" style={{fontSize: 'var(--text-sm)', margin: 0}}>
+              assegnati ({summary?.my_tasks?.due_soon ?? 0} in scadenza)
+            </p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body" style={{textAlign: 'center'}}>
+            <div style={{
+              width: '48px', 
+              height: '48px', 
+              background: 'var(--accent-info)', 
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto var(--space-4)'
+            }}>
+              <Icon name="tasks" color="white" />
+            </div>
+            <h3 style={{margin: '0 0 var(--space-2)', fontSize: 'var(--text-xl)'}}>Checklist</h3>
+            <div style={{fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)'}}>
+              {summary?.checklists?.pending_today ?? 0}
+            </div>
+            <p className="text-tertiary" style={{fontSize: 'var(--text-sm)', margin: 0}}>
+              da completare oggi
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick actions and recent documents */}
+      <div className="grid grid-2">
+        <div className="card">
+          <div className="card-header">
+            <h3 style={{margin: 0, fontSize: 'var(--text-xl)'}}>Azioni rapide</h3>
+          </div>
+          <div className="card-body">
+            <div style={{display: 'grid', gap: 'var(--space-3)'}}>
+              <a href="/maintenance" className="btn btn-outline" style={{justifyContent: 'flex-start'}}>
+                <Icon name="wrench"/> 
+                Gestione manutenzioni
+              </a>
+              <a href="/tasks" className="btn btn-outline" style={{justifyContent: 'flex-start'}}>
+                <Icon name="checklist"/> 
+                I miei incarichi
+              </a>
+              <a href="/shifts" className="btn btn-outline" style={{justifyContent: 'flex-start'}}>
+                <Icon name="tasks"/> 
+                Gestione turni
+              </a>
+              <a href="/documents" className="btn btn-outline" style={{justifyContent: 'flex-start'}}>
+                <Icon name="files"/> 
+                Documenti
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 style={{margin: 0, fontSize: 'var(--text-xl)'}}>Documenti recenti</h3>
+          </div>
+          <div className="card-body">
+            {(Array.isArray(summary?.recent_documents) ? summary!.recent_documents : []).length > 0 ? (
+              <div style={{display: 'flex', flexDirection: 'column', gap: 'var(--space-3)'}}>
+                {summary!.recent_documents.slice(0, 4).map((d, i) => (
+                  <a 
+                    key={i} 
+                    href={d.path} 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-3)',
+                      padding: 'var(--space-3)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--surface-secondary)',
+                      color: 'var(--text-primary)',
+                      textDecoration: 'none',
+                      transition: 'background 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-tertiary)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
+                  >
+                    <Icon name="files" size={18} />
+                    <span style={{fontSize: 'var(--text-sm)'}}>{d.name}</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-tertiary" style={{textAlign: 'center', margin: 0}}>
+                Nessun documento recente
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

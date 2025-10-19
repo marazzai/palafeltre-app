@@ -27,11 +27,13 @@ const menuItems: MenuItem[] = [
   { path: '/tasks', label: 'Incarichi', icon: 'checklist' },
   { path: '/documents', label: 'Documenti', icon: 'files' },
   { path: '/shifts', label: 'Turni', icon: 'tasks' },
+  { path: '/my-shifts', label: 'I Miei Turni', icon: 'tasks' },
+  { path: '/availability', label: 'Disponibilità', icon: 'tasks' },
   { path: '/game', label: 'Partita', icon: 'tasks' },
   { path: '/lights', label: 'Controllo Luci', icon: 'tasks' },
   { path: '/skating', label: 'Pattinaggio', icon: 'skate' },
   { path: '/skate-rental', label: 'Noleggio Pattini', icon: 'skate' },
-  { path: '/admin', label: 'Admin', icon: 'settings', requireAdmin: true },
+  { path: '/admin', label: 'Amministrazione', icon: 'settings', requireAdmin: true },
 ]
 
 export function AppLayout(){
@@ -81,19 +83,20 @@ export function AppLayout(){
   }
   
   const visibleItems = menuItems.filter(canAccess)
+  
   return (
     <div className="app">
       <aside className={"sidebar " + (open ? 'open' : '')}>
         <div className="brand">
           <Icon name="skate" />
-          <span>App Palafeltre</span>
+          <span>Palafeltre</span>
         </div>
         <nav>
-          <NavLink to="/" end onClick={onClickLink} className={({isActive}) => isActive ? 'active' : ''}><Icon name="home" /> Dashboard</NavLink>
-          {visibleItems.slice(1).map(item => (
+          {visibleItems.map(item => (
             <NavLink 
               key={item.path} 
               to={item.path} 
+              end={item.path === '/'}
               onClick={onClickLink} 
               className={({isActive}) => isActive ? 'active' : ''}
             >
@@ -104,9 +107,19 @@ export function AppLayout(){
       </aside>
       <main>
         <header className="header">
-          <button className="btn btn-outline" onClick={() => setOpen(!open)} aria-label="Apri menu"><Icon name="menu" /></button>
-          <div style={{display:'flex', gap:12, alignItems:'center'}}>
-            <span className="text-muted" style={{fontSize:14}}>{user ? `Ciao, ${user.username}` : 'Benvenuto'}</span>
+          <div className="header-left">
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={() => setOpen(!open)} 
+              aria-label="Apri menu"
+            >
+              <Icon name="menu" />
+            </button>
+          </div>
+          <div className="header-right">
+            <span className="text-secondary" style={{fontSize: 'var(--text-sm)'}}>
+              {user ? `Ciao, ${user.username}` : 'Benvenuto'}
+            </span>
             {getToken() && (
               <NotificationCenter
                 notifications={notifications}
@@ -117,9 +130,14 @@ export function AppLayout(){
               />
             )}
             {!getToken() ? (
-              <button className="btn" onClick={()=>navigate('/login')}>Accedi</button>
+              <button className="btn btn-primary" onClick={()=>navigate('/login')}>
+                Accedi
+              </button>
             ) : (
-              <button className="btn btn-outline" onClick={onLogout}>Esci</button>
+              <button className="btn btn-outline btn-sm" onClick={onLogout}>
+                <Icon name="logout" />
+                Esci
+              </button>
             )}
           </div>
         </header>
