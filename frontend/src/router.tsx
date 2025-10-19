@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from './ui/AppLayout'
 import AdminPanel from './ui/AdminPanel'
+import ObsControl from './ui/ObsControl'
 import AdminUsers from './ui/admin/Users'
 import { Dashboard } from './ui/Dashboard'
 import { SkatingControl } from './ui/SkatingControl'
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
           { path: 'shifts', element: <ShiftsPage /> },
           { path: 'skate-rental', element: <SkateRentalPage /> },
           { path: 'admin', element: <AdminPanel /> },
+          { path: 'obs', element: <ObsControl /> },
           { path: 'admin/users', element: <AdminUsers /> },
         ],
       },

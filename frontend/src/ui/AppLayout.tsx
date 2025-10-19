@@ -30,6 +30,7 @@ const menuItems: MenuItem[] = [
   { path: '/my-shifts', label: 'I Miei Turni', icon: 'tasks' },
   { path: '/availability', label: 'Disponibilità', icon: 'tasks' },
   { path: '/game', label: 'Partita', icon: 'tasks' },
+  { path: '/obs', label: 'OBS', icon: 'wrench', requirePermission: 'obs.view' },
   { path: '/scoreboard', label: 'Scoreboard', icon: 'ok' },
   { path: '/lights', label: 'Controllo Luci', icon: 'tasks' },
   { path: '/skating', label: 'Pattinaggio', icon: 'skate' },
