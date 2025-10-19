@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     rustc \
     cargo \
+    netcat-openbsd \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
