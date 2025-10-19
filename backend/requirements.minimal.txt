@@ -1,0 +1,18 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+SQLAlchemy==2.0.36
+# Postgres driver - using binary for easier build
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+# JWT handling - use simpler PyJWT instead of python-jose
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+email-validator==2.2.0
+bcrypt==3.2.2
+python-multipart==0.0.9
+pytest==8.3.3
+httpx==0.27.2
+# Rate limiting - try without cryptography deps first
+slowapi==0.1.9

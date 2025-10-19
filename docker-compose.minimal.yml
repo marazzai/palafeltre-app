@@ -1,0 +1,97 @@
+services:
+  # Database PostgreSQL ottimizzato per Portainer
+  db:
+    image: postgres:15-alpine
+    container_name: palafeltre-db
+    environment:
+      POSTGRES_DB: palafeltre
+      POSTGRES_USER: palafeltre
+      POSTGRES_PASSWORD: palafeltre123
+      # Configurazione semplificata per evitare problemi in Portainer
+      POSTGRES_HOST_AUTH_METHOD: md5
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    # Healthcheck semplificato che funziona in Portainer
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 5432 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - palafeltre
+
+  # Backend FastAPI con build minimal
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.minimal
+    container_name: palafeltre-backend
+    environment:
+      # Database connection hardcoded per evitare problemi con variabili
+      DATABASE_URL: postgresql+psycopg2://palafeltre:palafeltre123@db:5432/palafeltre
+      STORAGE_PATH: /app/storage
+      
+      # Security - CHANGE IN PRODUCTION
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@palafeltre.local
+      ADMIN_PASSWORD: adminadmin
+      FORCE_RESET_ADMIN_PASSWORD: "true"
+      
+      # CORS - Adjust for your domain
+      CORS_ORIGINS: "http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080"
+      
+      # App config
+      LOG_LEVEL: INFO
+      DEBUG: "false"
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    networks:
+      - palafeltre
+    # Healthcheck semplificato per il backend
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: palafeltre-frontend
+    environment:
+      VITE_API_BASE_URL: /api
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - palafeltre
+    # Healthcheck semplificato per il frontend
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  palafeltre:
+    driver: bridge
