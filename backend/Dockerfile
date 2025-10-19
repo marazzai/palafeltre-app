@@ -11,12 +11,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libffi-dev \
     pkg-config \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    libjpeg-dev \
+    git \
+    rustc \
+    cargo \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
 COPY requirements.txt ./
 # Upgrade packaging tools so pip can use prebuilt wheels when available
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade cython
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app source
