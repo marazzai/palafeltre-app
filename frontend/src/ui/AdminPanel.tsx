@@ -380,6 +380,40 @@ function ModulesSection(){
         }catch(e){ alert('Scan error') }
       }
 
+      // OBS mapping + status
+      const [obsStatus, setObsStatus] = useState<{ connected?: boolean; host?: string } | null>(null)
+      const [obsMapping, setObsMapping] = useState<{ activate?: string; deactivate?: string }>({})
+      const loadObsStatus = async ()=>{
+        try{
+          const r = await fetch('/api/v1/admin/obs/status', { headers: { Authorization: `Bearer ${token()}` } })
+          if(!r.ok) return setObsStatus({ connected: false })
+          const d = await r.json(); setObsStatus(d)
+        }catch{ setObsStatus({ connected: false }) }
+      }
+      const disconnectObs = async ()=>{
+        try{
+          await fetch('/api/v1/admin/obs/disconnect', { method: 'POST', headers: { Authorization: `Bearer ${token()}` } })
+        }catch{}
+        await loadObsStatus()
+      }
+      const loadObsMapping = async ()=>{
+        try{
+          const r = await fetch('/api/v1/admin/obs/mapping', { headers: { Authorization: `Bearer ${token()}` } })
+          if(!r.ok) return
+          const d = await r.json()
+          let map: any = {}
+          try{ map = typeof d.mapping === 'string' ? JSON.parse(d.mapping||'{}') : (d.mapping || {}) }catch{ map = d.mapping || {} }
+          setObsMapping(map)
+        }catch{}
+      }
+      const saveObsMapping = async ()=>{
+        try{
+          await fetch('/api/v1/admin/obs/mapping', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ mapping: obsMapping }) })
+          alert('Mapping salvato')
+        }catch(e){ alert('Errore salvataggio mapping') }
+      }
+      useEffect(()=>{ loadObsStatus(); loadObsMapping() },[])
+
   // Ticket categories
   type Cat = { id:number; name:string; color?:string; sort_order:number }
   const [cats, setCats] = useState<Cat[]>([])
@@ -422,6 +456,34 @@ function ModulesSection(){
             <option value="">-- seleziona scena --</option>
             {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
           </select>
+        </div>
+        <div style={{display:'flex', gap:8, alignItems:'center', marginTop:8}}>
+          <div style={{display:'flex', flexDirection:'column'}}>
+            <div style={{fontSize:13}}>OBS connesso: <strong>{obsStatus?.connected? 'Sì' : 'No'}</strong></div>
+            <div style={{marginTop:6}}>
+              <button className="btn btn-outline" onClick={loadObsStatus}>Aggiorna stato</button>
+              <button className="btn btn-outline" onClick={disconnectObs} style={{marginLeft:8}}>Disconnetti</button>
+            </div>
+          </div>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <div>
+              <div style={{fontSize:12, fontWeight:600}}>Scena da attivare</div>
+              <select value={obsMapping.activate||''} onChange={e=> setObsMapping(prev=> ({...prev, activate: e.target.value}))}>
+                <option value="">-- nessuna --</option>
+                {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:12, fontWeight:600}}>Scena da disattivare</div>
+              <select value={obsMapping.deactivate||''} onChange={e=> setObsMapping(prev=> ({...prev, deactivate: e.target.value}))}>
+                <option value="">-- nessuna --</option>
+                {obsScenes.map(s=> <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <button className="btn" onClick={saveObsMapping}>Salva mapping OBS</button>
+            </div>
+          </div>
         </div>
         <label>Minuti anticipo jingle<input value={settings['skating.jingle_lead_minutes']||''} onChange={e=> set('skating.jingle_lead_minutes', e.target.value)} /></label>
       </div></div>
