@@ -1,7 +1,7 @@
 services:
   # Database PostgreSQL ottimizzato per Portainer
   db:
-  image: postgres:15
+    image: postgres:15
     container_name: palafeltre-db
     environment:
       POSTGRES_DB: palafeltre
