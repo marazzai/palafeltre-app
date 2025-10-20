@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getToken } from '../auth'
 import { useNavigate } from 'react-router-dom'
 
 type User = { id:number; username?:string; full_name?:string|null; email:string; roles:string[]; is_active:boolean }
@@ -9,7 +10,7 @@ export default function AdminPanel(){
   const [tab, setTab] = useState<'users'|'roles'>('users')
   // client-side guard: redirect non-admin
   useEffect(()=>{
-    const t = localStorage.getItem('token')||''
+    const t = getToken()
     if(!t){ navigate('/') ; return }
     fetch('/api/v1/me', { headers: { Authorization: `Bearer ${t}` } })
       .then(r=> r.ok ? r.json() : Promise.reject())
@@ -35,7 +36,7 @@ export default function AdminPanel(){
 }
 
 function token(){
-  return localStorage.getItem('token')||''
+  return getToken()
 }
 
 function UsersSection(){

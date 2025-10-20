@@ -29,6 +29,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir --upgrade cython
 # Only install the main requirements here. Heavy/optional packages (obs-websocket, slowapi)
 # were moved to requirements-optional.txt to avoid build failures on minimal hosts.
+# Note: we added `cryptography` to requirements.txt; the image includes build deps
+# (libssl-dev, build-essential, rust/cargo) so cryptography should build successfully.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app source

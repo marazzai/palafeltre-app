@@ -18,7 +18,7 @@ export function DocumentsPage(){
   const [searchQ, setSearchQ] = useState('')
   const [searchRes, setSearchRes] = useState<any[]|null>(null)
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function loadTree(){

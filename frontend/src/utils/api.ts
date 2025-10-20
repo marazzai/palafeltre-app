@@ -1,9 +1,10 @@
 import { showToast } from '../components/Toast'
+import { getToken, clearToken } from '../auth'
 
 // Wrapper fetch che gestisce automaticamente 401 e mostra toast
 export async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
-  const token = localStorage.getItem('token')
-  
+  const token = getToken()
+
   const headers: Record<string, string> = {
     ...((options?.headers as Record<string, string>) || {}),
   }
@@ -19,8 +20,8 @@ export async function apiFetch(url: string, options?: RequestInit): Promise<Resp
   
   // Gestione 401 - Sessione scaduta
   if (response.status === 401) {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearToken()
+    try{ localStorage.removeItem('user') }catch(e){}
     showToast('Sessione scaduta. Effettua nuovamente il login.', 'error')
     
     // Redirect dopo un breve delay

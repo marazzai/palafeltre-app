@@ -27,7 +27,7 @@ export function TasksPage(){
     is_recurring:false, recurrence_pattern:'daily', recurrence_interval:1, recurrence_end_date:''
   })
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 

@@ -1,6 +1,7 @@
 from typing import List
 import os
 from pathlib import Path
+import hashlib
 
 
 def _parse_csv(value: str | None, default: List[str]) -> List[str]:
@@ -77,6 +78,14 @@ class Settings:
         Path(self.storage_path).mkdir(exist_ok=True)
         self.documents_path.mkdir(exist_ok=True)
         self.logs_path.mkdir(exist_ok=True)
+
+        # compute a short fingerprint of the secret to help detect mismatched secrets across instances
+        try:
+            h = hashlib.sha256()
+            h.update((self.secret_key or '').encode('utf-8'))
+            self.secret_fingerprint = h.hexdigest()[:12]
+        except Exception:
+            self.secret_fingerprint = None
 
     @property
     def cors_origins(self) -> List[str]:

@@ -1,18 +1,17 @@
 import { useEffect, useState, useRef } from 'react'
 import { Icon } from '../components/Icon'
-
-function token(){ return localStorage.getItem('token')||'' }
+import { getToken } from '../auth'
 
 export default function ObsControl(){
   const [settings, setSettings] = useState<Record<string,string>>({})
   const [scenes, setScenes] = useState<string[]>([])
-  const [status, setStatus] = useState<{connected?:boolean} | null>(null)
+  const [status, setStatus] = useState<{connected?:boolean, last_error?:string, last_error_ts?:number} | null>(null)
   const [mapping, setMapping] = useState<{ activate?:string; deactivate?:string}>({})
   const polling = useRef<number | null>(null)
 
   useEffect(()=>{ (async()=>{
     try{
-      const list = await fetch('/api/v1/admin/settings', { headers: { Authorization: `Bearer ${token()}` } }).then(r=>r.json())
+  const list = await fetch('/api/v1/admin/settings', { headers: { Authorization: `Bearer ${getToken()}` } }).then(r=>r.json())
       const map: Record<string,string> = {}
       list.forEach((it:any)=> map[it.key]=it.value)
       setSettings(map)
@@ -30,7 +29,7 @@ export default function ObsControl(){
   async function saveSettings(){
     const keys = ['obs.host','obs.port','obs.password','obs.scene']
     const items = keys.filter(k=> settings[k]!==undefined).map(k=> ({ key:k, value: String(settings[k] ?? '') }))
-    const r = await fetch('/api/v1/admin/settings', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(items) })
+  const r = await fetch('/api/v1/admin/settings', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify(items) })
     if(!r.ok) alert('Errore salvataggio impostazioni')
     else alert('Impostazioni salvate')
   }
@@ -38,28 +37,28 @@ export default function ObsControl(){
   async function connectObs(){
     // post config to backend which will store settings and attempt to start the manager
     const body = { host: settings['obs.host']||'', port: Number(settings['obs.port']||4455), password: settings['obs.password']||'' }
-    const r = await fetch('/api/v1/admin/obs/config', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(body) })
+  const r = await fetch('/api/v1/admin/obs/config', { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify(body) })
     if(!r.ok){ alert('Connessione fallita'); return }
     await loadStatus()
   }
 
   async function scanScenes(){
     try{
-      const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${token()}` } })
+  const r = await fetch('/api/v1/admin/obs/scan', { headers: { Authorization: `Bearer ${getToken()}` } })
       if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Scan failed: ' + (txt||r.status)); return }
       const d = await r.json(); setScenes(d.scenes||[])
     }catch(e){ alert('Scan error') }
   }
 
   async function loadStatus(){
-    try{ const r = await fetch('/api/v1/admin/obs/status', { headers: { Authorization: `Bearer ${token()}` } }); if(!r.ok) return setStatus({connected:false}); setStatus(await r.json()) }catch{ setStatus({connected:false}) }
+  try{ const r = await fetch('/api/v1/admin/obs/status', { headers: { Authorization: `Bearer ${getToken()}` } }); if(!r.ok) return setStatus({connected:false}); setStatus(await r.json()) }catch{ setStatus({connected:false}) }
   }
 
-  async function disconnectObs(){ await fetch('/api/v1/admin/obs/disconnect', { method:'POST', headers: { Authorization: `Bearer ${token()}` } }); await loadStatus() }
+  async function disconnectObs(){ await fetch('/api/v1/admin/obs/disconnect', { method:'POST', headers: { Authorization: `Bearer ${getToken()}` } }); await loadStatus() }
 
   async function loadMapping(){
     try{
-      const r = await fetch('/api/v1/admin/obs/mapping', { headers: { Authorization: `Bearer ${token()}` } })
+  const r = await fetch('/api/v1/admin/obs/mapping', { headers: { Authorization: `Bearer ${getToken()}` } })
       if(!r.ok) return
       const d = await r.json(); let map: any = {}
       try{ map = typeof d.mapping === 'string' ? JSON.parse(d.mapping||'{}') : (d.mapping || {}) }catch{ map = d.mapping||{} }
@@ -68,7 +67,7 @@ export default function ObsControl(){
   }
 
   async function saveMapping(){
-    const r = await fetch('/api/v1/admin/obs/mapping', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ mapping }) })
+  const r = await fetch('/api/v1/admin/obs/mapping', { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ mapping }) })
     if(!r.ok) alert('Errore salvataggio mapping')
     else alert('Mapping salvato')
   }
@@ -93,13 +92,21 @@ export default function ObsControl(){
               <button className="btn btn-outline" onClick={async ()=>{
                 try{
                   const payload = { host: settings['obs.host']||'', port: Number(settings['obs.port']||4455), password: settings['obs.password']||'' }
-                  const r = await fetch('/api/v1/admin/obs/test', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${localStorage.getItem('token')||''}` }, body: JSON.stringify(payload) })
+                  const r = await fetch('/api/v1/admin/obs/test', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify(payload) })
                   if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Test failed: '+ (txt||r.status)); return }
                   const d = await r.json(); alert('Test OK — found scenes: ' + (d.scenes||[]).join(', '))
                 }catch(e){ alert('Test connection error') }
               }}>Test connessione</button>
             </div>
-            <div style={{marginTop:8, fontSize:13}}>Stato connessione: <strong>{status?.connected? 'Connesso' : 'Non connesso'}</strong></div>
+            <div style={{marginTop:8, fontSize:13}}>
+              Stato connessione: <strong>{status?.connected? 'Connesso' : 'Non connesso'}</strong>
+              {status?.last_error ? (
+                <div style={{marginTop:6, color:'#c0392b'}}>
+                  <div style={{fontWeight:700}}>Ultimo errore:</div>
+                  <div style={{fontSize:12, whiteSpace:'pre-wrap'}}>{status.last_error}</div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div style={{flex:1, minWidth:320}}>
@@ -107,6 +114,13 @@ export default function ObsControl(){
             <div style={{display:'flex', gap:8, alignItems:'center'}}>
               <button className="btn btn-outline" onClick={scanScenes}>Scansiona</button>
               <button className="btn" onClick={()=> setScenes([])}>Pulisci</button>
+              <button className="btn btn-outline" onClick={async ()=>{
+                try{
+                  const r = await fetch('/api/v1/admin/obs/test-saved', { method:'POST', headers:{ Authorization: `Bearer ${getToken()}` } })
+                  if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Test saved config failed: '+ (txt||r.status)); return }
+                  const d = await r.json(); alert('Test saved config: ' + (d.ok ? 'OK' : 'FAIL') + '\n' + (d.error || JSON.stringify(d)))
+                }catch(e){ alert('Test saved config error') }
+              }}>Test saved config</button>
             </div>
             <div style={{marginTop:8}}>
               <select value={settings['obs.scene']||''} onChange={e=> set('obs.scene', e.target.value)} style={{width:'100%'}}>
@@ -120,7 +134,7 @@ export default function ObsControl(){
                 const scene = settings['obs.scene']||''
                 if(!scene){ alert('Seleziona prima una scena'); return }
                 try{
-                  const r = await fetch('/api/v1/admin/obs/scene', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${localStorage.getItem('token')||''}` }, body: JSON.stringify({ scene }) })
+                  const r = await fetch('/api/v1/admin/obs/scene', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ scene }) })
                   if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Change scene failed: '+ (txt||r.status)); return }
                   alert('Scena cambiata')
                 }catch(e){ alert('Errore cambio scena') }
@@ -128,8 +142,23 @@ export default function ObsControl(){
             </div>
             <div style={{marginTop:8}}>
               <strong>Scene trovate:</strong>
-              <div style={{maxHeight:140, overflow:'auto', marginTop:6}}>
-                {scenes.length === 0 ? <div className="text-muted">Nessuna scena</div> : scenes.map(s=> <div key={s} style={{padding:6, borderBottom:'1px solid #eee'}}>{s}</div>)}
+              <div style={{maxHeight:200, overflow:'auto', marginTop:6}}>
+                {scenes.length === 0 ? <div className="text-muted">Nessuna scena</div> : scenes.map(s=> (
+                  <div key={s} style={{padding:6, borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <div style={{flex:1}}>{s}</div>
+                    <div style={{display:'flex', gap:8}}>
+                      <button className="btn btn-outline" onClick={async ()=>{
+                        // preview: set scene now (uses persistent manager if connected)
+                        try{
+                          const r = await fetch('/api/v1/admin/obs/scene', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ scene: s }) })
+                          if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Change scene failed: '+ (txt||r.status)); return }
+                          alert('Scena cambiata: ' + s)
+                        }catch(e){ alert('Errore cambio scena') }
+                      }}>Switch</button>
+                      <button className="btn" onClick={()=>{ set('obs.scene', s); }}>Usa</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

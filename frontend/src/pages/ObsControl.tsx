@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Input, Alert, ToggleSwitch } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { getToken } from '../auth'
 
 interface ObsStatus {
   connected: boolean
@@ -37,8 +38,8 @@ export function ObsControl() {
 
   const loadStatus = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/status', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/status', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -59,8 +60,8 @@ export function ObsControl() {
 
   const loadScenes = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/scenes', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/scan', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -82,8 +83,8 @@ export function ObsControl() {
     setSuccess('')
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/connect', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,8 +114,8 @@ export function ObsControl() {
     setSuccess('')
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/disconnect', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/disconnect', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -143,8 +144,8 @@ export function ObsControl() {
     setSuccess('')
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/init', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/test-saved', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -174,8 +175,8 @@ export function ObsControl() {
     if (!hasPermission('obs.control')) return
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/obs/scene', {
+      const token = getToken()
+      const response = await fetch('/api/v1/admin/obs/scene', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

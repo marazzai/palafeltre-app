@@ -1,7 +1,5 @@
-# syntax=docker/dockerfile:1
-
 # Build stage
-FROM node:20-alpine AS build
+FROM node:20 AS build
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f pnpm-lock.yaml ]; then npm i -g pnpm && pnpm i; \
@@ -14,7 +12,8 @@ RUN if [ -f pnpm-lock.yaml ]; then pnpm build; \
     else npm run build; fi
 
 # Run stage
-FROM nginx:1.27-alpine
+# Use the standard (non-alpine) nginx image to avoid alpine manifest issues on some registries
+FROM nginx:1.27
 # Install netcat for healthcheck
 RUN apk add --no-cache netcat-openbsd curl
 COPY --from=build /app/dist /usr/share/nginx/html

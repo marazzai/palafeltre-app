@@ -10,7 +10,7 @@ export function AvailabilityPage(){
   const [blocks, setBlocks] = useState<Block[]>([])
   const [form, setForm] = useState<{ day:string; start:string; end:string }>({ day:'0', start:'09:00', end:'13:00' })
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
 
   async function load(){

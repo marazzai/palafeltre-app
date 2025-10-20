@@ -25,12 +25,16 @@ import os, shutil
 from ...services.pdf_service import ensure_archive_path, render_pdf_bytes, save_pdf_to_archive
 from ...services.siren import siren_wav_bytes
 from ...services.obs_v5 import obs_manager
+from ...core.encryption import encrypt_value, decrypt_value
 from fastapi import Form, Request
+import importlib
 try:
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-except Exception:  # pragma: no cover - fallback for editor / dev machines without slowapi
-    # Minimal stubs so Pylance/editor don't report missing imports and runtime can operate
+    slowapi = importlib.import_module('slowapi')
+    Limiter = getattr(slowapi, 'Limiter')
+    util = importlib.import_module('slowapi.util')
+    get_remote_address = getattr(util, 'get_remote_address')
+except Exception:
+    # Fallback shim when slowapi not installed in analysis/runtime environment
     class Limiter:  # very small shim compatible with decorator usage in this module
         def __init__(self, *args, **kwargs):
             pass
@@ -77,8 +81,18 @@ def get_db():
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)) -> User:
+    # Debug: mask token for logs (show only prefix/suffix) to help diagnose 401 issues
+    try:
+        masked = token[:8] + '...' + token[-6:] if token and len(token) > 20 else token
+    except Exception:
+        masked = '<token>'
     payload = decode_token(token)
     if not payload or 'sub' not in payload:
+        try:
+            logger = logging.getLogger(__name__)
+            logger.warning(f'Authentication failed for token={masked} payload={payload}')
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non autenticato")
     user = db.query(User).get(int(payload['sub']))
     if not user or not user.is_active:
@@ -1256,7 +1270,9 @@ class ObsConfig(BaseModel):
 @router.put('/admin/obs/config')
 def admin_obs_config(data: ObsConfig, db: Session = Depends(get_db), current: User = Depends(require_admin)):
     # store as app settings
-    kv = { 'obs.host': data.host, 'obs.port': str(data.port), 'obs.password': data.password or '' }
+    # store encrypted password to protect at-rest secrets
+    enc_pwd = encrypt_value(data.password or '')
+    kv = { 'obs.host': data.host, 'obs.port': str(data.port), 'obs.password': enc_pwd }
     for k,v in kv.items():
         row = db.query(AppSetting).filter(AppSetting.key==k).first()
         if row: row.value = v
@@ -1275,7 +1291,16 @@ def admin_obs_config(data: ObsConfig, db: Session = Depends(get_db), current: Us
 @router.get('/admin/obs/status')
 def admin_obs_status(_: User = Depends(require_admin)):
     try:
-        return {'connected': obs_manager.is_connected()}
+        status: dict = {'connected': bool(obs_manager.is_connected())}
+        # include last error diagnostics if available
+        try:
+            last = obs_manager.get_last_error()
+            if last:
+                status['last_error'] = last.get('error')
+                status['last_error_ts'] = last.get('timestamp')
+        except Exception:
+            pass
+        return status
     except Exception:
         return {'connected': False}
 
@@ -1310,29 +1335,97 @@ def admin_obs_test_connection(data: ObsTestRequest, db: Session = Depends(get_db
     This does not change the persistent manager configuration.
     """
     # Try to use obswebsocket client if available
+    import importlib
     try:
-        # local import to avoid hard dependency at module import time
-        from obswebsocket import obsws, requests as obsreq
+        mod = importlib.import_module('obswebsocket')
+        obsws = getattr(mod, 'obsws')
+        obsreq = getattr(mod, 'requests')
+        client_version = getattr(mod, '__version__', None)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'obswebsocket client not available: {e}')
     try:
         ws = obsws(data.host, data.port, data.password or '')
         ws.connect()
         try:
-            resp = ws.call(obsreq.GetSceneList())
             scenes = []
+            version_info = None
+            err_info = None
+            # Try to fetch version info if supported
             try:
-                scenes = [s['sceneName'] for s in resp.getScenes()]
+                if hasattr(obsreq, 'GetVersion'):
+                    vresp = ws.call(obsreq.GetVersion())
+                    version_info = str(vresp)
             except Exception:
-                if hasattr(resp, 'getScenes'):
+                # ignore; not critical
+                pass
+            try:
+                resp = ws.call(obsreq.GetSceneList())
+                try:
                     scenes = [s['sceneName'] for s in resp.getScenes()]
-            # success
-            return {'ok': True, 'scenes': scenes}
+                except Exception:
+                    if hasattr(resp, 'getScenes'):
+                        scenes = [s['sceneName'] for s in resp.getScenes()]
+            except Exception as e:
+                err_info = str(e)
+            result = {'ok': err_info is None, 'client_lib_version': client_version, 'version_info': version_info, 'scenes': scenes}
+            if err_info:
+                result['error'] = err_info
+                # Heuristic: detect if OBS server is running obs-websocket v4 (older protocol)
+                low = err_info.lower()
+                if 'unknown request' in low or 'invalid request' in low or 'method not found' in low:
+                    result['hint'] = 'The server may be running obs-websocket v4 (protocol mismatch). Try upgrading OBS WebSocket to v5 or use a v4-compatible client.'
+            return result
         finally:
             try: ws.disconnect()
             except Exception: pass
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
+
+
+@router.post('/admin/obs/test-saved')
+def admin_obs_test_saved(db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    """Test connection using saved settings in AppSetting (decrypts obs.password if encrypted). Returns same diagnostics as /admin/obs/test."""
+    host = _get_setting_value(db, 'obs.host', '') or ''
+    port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
+    stored_pwd = _get_setting_value(db, 'obs.password', '') or ''
+    try:
+        from ...core.encryption import decrypt_value
+        try:
+            pwd = decrypt_value(stored_pwd)
+        except Exception:
+            pwd = stored_pwd
+    except Exception:
+        pwd = stored_pwd
+    req = ObsTestRequest(host=host, port=port, password=pwd)
+    return admin_obs_test_connection(req, db, current)
+
+
+# Temporary debug endpoints (admin-only) to help troubleshoot auth/permissions in the frontend
+@router.get('/admin/debug/whoami')
+def admin_debug_whoami(db: Session = Depends(get_db), current: User = Depends(require_admin), token: str = Depends(oauth2_scheme)):
+    """Return current user info and decoded token payload for debugging (admin-only)."""
+    payload = None
+    try:
+        payload = decode_token(token)
+    except Exception:
+        payload = None
+    from ...core.config import settings
+    return { 'user': { 'id': current.id, 'username': current.username, 'roles': [r.name for r in current.roles] }, 'token_payload': payload, 'secret_fingerprint': settings.secret_fingerprint }
+
+
+@router.get('/admin/debug/obs-settings')
+def admin_debug_obs_settings(db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    """Return saved OBS settings (password masked) for quick diagnostics."""
+    host = _get_setting_value(db, 'obs.host', '') or ''
+    port = _get_setting_value(db, 'obs.port', '') or ''
+    stored = _get_setting_value(db, 'obs.password', '') or ''
+    masked = ''
+    if stored.startswith('enc:'):
+        masked = 'enc:********'
+    elif stored:
+        masked = stored[:1] + '********'
+    return {'host': host, 'port': port, 'password_masked': masked }
+
 
 
 @router.post('/admin/obs/disconnect')
@@ -1354,7 +1447,12 @@ def admin_obs_scan(db: Session = Depends(get_db), current: User = Depends(requir
         # fallback: try to use settings to temporarily connect
         host = _get_setting_value(db, 'obs.host', '') or ''
         port = int(_get_setting_value(db, 'obs.port', '4455') or '4455')
-        pwd = _get_setting_value(db, 'obs.password', '') or ''
+        stored_pwd = _get_setting_value(db, 'obs.password', '') or ''
+        try:
+            pwd = decrypt_value(stored_pwd)
+        except Exception:
+            # fall back to stored value if decryption fails
+            pwd = stored_pwd
         if host:
             # try to start manager with saved settings and wait briefly
             obs_manager.set_config(host, port, pwd)

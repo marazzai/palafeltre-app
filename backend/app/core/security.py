@@ -4,6 +4,10 @@ import jwt
 from jwt.exceptions import PyJWTError, ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from .config import settings
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -66,13 +70,17 @@ def decode_token(token: str) -> Optional[dict]:
         return decoded
     except ExpiredSignatureError:
         # Token is expired
+        logger.debug('JWT decode failed: expired token')
         return None
     except InvalidTokenError:
         # Token is invalid (malformed, wrong signature, etc.)
+        logger.debug('JWT decode failed: invalid token')
         return None
     except PyJWTError:
         # Any other JWT error
+        logger.debug('JWT decode failed: PyJWTError')
         return None
     except Exception:
         # Catch-all for any unexpected errors
+        logger.debug('JWT decode unexpected error: %s', traceback.format_exc())
         return None

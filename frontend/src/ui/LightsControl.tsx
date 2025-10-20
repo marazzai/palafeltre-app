@@ -12,7 +12,7 @@ export function LightsControl(){
   const [message, setMessage] = useState<string>('')
   const [autoRefresh, setAutoRefresh] = useState(true)
 
-  useEffect(() => { const t = localStorage.getItem('token'); if(t) setToken(t) }, [])
+  useEffect(() => { const t = getToken(); if(t) setToken(t) }, [])
   async function load(){
     try{
       const res = await fetch('/api/v1/dali/groups', { headers: token ? { Authorization: `Bearer ${token}` } : undefined })

@@ -45,8 +45,8 @@ export default function SkateRentalPage() {
   const [activeOnly, setActiveOnly] = useState(true)
 
   useEffect(() => {
-    const t = localStorage.getItem('token')
-    if (t) setToken(t)
+  const t = getToken()
+  if (t) setToken(t)
   }, [])
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined
