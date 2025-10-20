@@ -42,18 +42,14 @@ export function Login() {
   }
 
   return (
-    <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)', background: 'linear-gradient(180deg, rgba(0,0,0,0.6), rgba(6,6,8,0.9))'}}>
-      <div style={{width: '100%', maxWidth: 520}}>
+    <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)', background: 'var(--bg-gradient)'}}>
+      <div style={{width: '100%', maxWidth: 480}}>
         <div style={{textAlign: 'center', marginBottom: 'var(--space-6)'}}>
           <div style={{display:'inline-flex', alignItems:'center', gap:12, padding:12}}>
-            <div style={{width:56, height:56, borderRadius:12, background:'linear-gradient(135deg,var(--accent-primary),var(--accent-secondary))', display:'flex', alignItems:'center', justifyContent:'center'}}>
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <div style={{width:64, height:64, borderRadius:14, background:'linear-gradient(135deg,var(--accent-primary),var(--accent-secondary))', display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M3 17h18l-1 3H4l-1-3ZM8 13h8a4 4 0 0 0 4-4V5H4v4a4 4 0 0 0 4 4Z" />
               </svg>
-            </div>
-            <div style={{textAlign:'left'}}>
-              <h1 style={{margin:0, fontSize:'var(--text-3xl)', fontWeight:700}}>Palafeltre</h1>
-              <div style={{fontSize:'var(--text-sm)', color:'var(--text-tertiary)'}}>Controllo e gestione palaghiaccio</div>
             </div>
           </div>
         </div>
@@ -62,7 +58,7 @@ export function Login() {
           <form onSubmit={handleSubmit} className="" style={{display:'grid', gap: 'var(--space-4)'}}>
             <div style={{textAlign:'center', marginBottom: 'var(--space-2)'}}>
               <h2 style={{margin:0, fontSize:'var(--text-2xl)', fontWeight:700}}>Accedi</h2>
-              <p style={{margin: '6px 0 0 0', color:'var(--text-secondary)'}}>Inserisci username e password</p>
+              <p style={{margin: '6px 0 0 0', color:'var(--text-secondary)'}}>Benvenuto — accedi per continuare</p>
             </div>
 
             {error && (
@@ -77,7 +73,7 @@ export function Login() {
               name="username"
               value={formData.username}
               onChange={handleChange}
-              placeholder="username@example.com"
+              placeholder="admin"
               required
               autoComplete="username"
               autoFocus

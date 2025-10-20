@@ -1,6 +1,6 @@
 import React from 'react'
 
-type IconName = 'home' | 'users' | 'tasks' | 'wrench' | 'checklist' | 'files' | 'skate' | 'menu' | 'close' | 'alert' | 'ok' | 'settings' | 'logout'
+type IconName = 'home' | 'users' | 'tasks' | 'wrench' | 'checklist' | 'files' | 'skate' | 'menu' | 'close' | 'alert' | 'ok' | 'settings' | 'logout' | 'play'
 
 const paths: Record<IconName, JSX.Element> = {
   home: (<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5Z"/>),
@@ -16,6 +16,7 @@ const paths: Record<IconName, JSX.Element> = {
   ok: (<path d="M20 6 9 17l-5-5"/>),
   settings: (<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5a7.4 7.4 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1l-.3-2.6H9.1l-.3 2.6c-.6.2-1.2.6-1.7 1l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.8 1.7 1l.3 2.6h5.4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.5c.1-.3.1-.7.1-1Z"/>),
   logout: (<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9"/>)
+  ,play: (<path d="M5 3v18l15-9L5 3z" />)
 }
 
 export function Icon({ name, size=20, color='currentColor', strokeWidth=1.6 }: { name: IconName, size?: number, color?: string, strokeWidth?: number }){
