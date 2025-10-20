@@ -90,6 +90,14 @@ export default function ObsControl(){
               <button className="btn" onClick={connectObs}><Icon name="play" /> Connetti</button>
               <button className="btn btn-outline" onClick={disconnectObs}><Icon name="logout" /> Disconnetti</button>
               <button className="btn btn-outline" onClick={saveSettings}><Icon name="ok" /> Salva impostazioni</button>
+              <button className="btn btn-outline" onClick={async ()=>{
+                try{
+                  const payload = { host: settings['obs.host']||'', port: Number(settings['obs.port']||4455), password: settings['obs.password']||'' }
+                  const r = await fetch('/api/v1/admin/obs/test', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${localStorage.getItem('token')||''}` }, body: JSON.stringify(payload) })
+                  if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Test failed: '+ (txt||r.status)); return }
+                  const d = await r.json(); alert('Test OK — found scenes: ' + (d.scenes||[]).join(', '))
+                }catch(e){ alert('Test connection error') }
+              }}>Test connessione</button>
             </div>
             <div style={{marginTop:8, fontSize:13}}>Stato connessione: <strong>{status?.connected? 'Connesso' : 'Non connesso'}</strong></div>
           </div>
@@ -105,6 +113,18 @@ export default function ObsControl(){
                 <option value="">-- seleziona scena predefinita --</option>
                 {scenes.map(s=> <option key={s} value={s}>{s}</option>)}
               </select>
+            </div>
+            <div style={{marginTop:8, display:'flex', gap:8}}>
+              <button className="btn" onClick={async ()=>{
+                // switch to the selected scene now
+                const scene = settings['obs.scene']||''
+                if(!scene){ alert('Seleziona prima una scena'); return }
+                try{
+                  const r = await fetch('/api/v1/admin/obs/scene', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: `Bearer ${localStorage.getItem('token')||''}` }, body: JSON.stringify({ scene }) })
+                  if(!r.ok){ const txt = await r.text().catch(()=>null); alert('Change scene failed: '+ (txt||r.status)); return }
+                  alert('Scena cambiata')
+                }catch(e){ alert('Errore cambio scena') }
+              }}>Switch scena ora</button>
             </div>
             <div style={{marginTop:8}}>
               <strong>Scene trovate:</strong>

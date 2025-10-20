@@ -1223,8 +1223,16 @@ class SettingItem(BaseModel):
 
 @router.get('/admin/settings', response_model=list[SettingItem])
 def admin_settings_list(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    # Do not return sensitive values like obs.password via the generic settings API.
+    # OBS password is managed through /admin/obs/config to avoid accidental overwrite.
     rows = db.query(AppSetting).order_by(AppSetting.key.asc()).all()
-    return [SettingItem(key=r.key, value=r.value) for r in rows]
+    items = []
+    for r in rows:
+        if r.key == 'obs.password':
+            # omit password from generic settings list
+            continue
+        items.append(SettingItem(key=r.key, value=r.value))
+    return items
 
 @router.put('/admin/settings')
 def admin_settings_set(items: list[SettingItem], db: Session = Depends(get_db), current: User = Depends(require_admin)):
@@ -1270,6 +1278,61 @@ def admin_obs_status(_: User = Depends(require_admin)):
         return {'connected': obs_manager.is_connected()}
     except Exception:
         return {'connected': False}
+
+
+class ObsSceneRequest(BaseModel):
+    scene: str
+
+
+@router.post('/admin/obs/scene')
+def admin_obs_set_scene(data: ObsSceneRequest, _: User = Depends(require_admin)):
+    """Set the current program scene immediately using the persistent manager if connected."""
+    try:
+        if not obs_manager.is_connected():
+            raise HTTPException(status_code=400, detail='OBS not connected')
+        obs_manager.set_scene(data.scene)
+        return {'ok': True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ObsTestRequest(BaseModel):
+    host: str
+    port: int = 4455
+    password: str | None = None
+
+
+@router.post('/admin/obs/test')
+def admin_obs_test_connection(data: ObsTestRequest, db: Session = Depends(get_db), current: User = Depends(require_admin)):
+    """Attempt a one-shot connection using provided credentials and return diagnostic info.
+    This does not change the persistent manager configuration.
+    """
+    # Try to use obswebsocket client if available
+    try:
+        # local import to avoid hard dependency at module import time
+        from obswebsocket import obsws, requests as obsreq
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'obswebsocket client not available: {e}')
+    try:
+        ws = obsws(data.host, data.port, data.password or '')
+        ws.connect()
+        try:
+            resp = ws.call(obsreq.GetSceneList())
+            scenes = []
+            try:
+                scenes = [s['sceneName'] for s in resp.getScenes()]
+            except Exception:
+                if hasattr(resp, 'getScenes'):
+                    scenes = [s['sceneName'] for s in resp.getScenes()]
+            # success
+            return {'ok': True, 'scenes': scenes}
+        finally:
+            try: ws.disconnect()
+            except Exception: pass
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Connection failed: {e}')
 
 
 @router.post('/admin/obs/disconnect')
